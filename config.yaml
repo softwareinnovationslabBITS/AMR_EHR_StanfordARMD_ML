@@ -3,6 +3,7 @@ seed: 42
 paths:
   dataset_dir: "dataset"
   models_dir: "models"
+  logistic_regression_output_dir: "logistic_regression/logistic_regression_dl_matched_outputs"
 
 split:
   test_size: 0.15
@@ -12,9 +13,9 @@ split:
 # Imbalance-handling XGBoost experiments (manuscript Table 1)
 xgboost_imbalance:
   dataset_dir: "dataset"
-  cache_dir: "cache"
-  saved_models_dir: "saved_models"
-  results_dir: "results"
+  cache_dir: "xgboost/imbalance_handling/cache"
+  saved_models_dir: "xgboost/imbalance_handling/saved_models"
+  results_dir: "xgboost/imbalance_handling/results"
   random_state: 42
   test_size: 0.2
   device: "cuda"
@@ -35,6 +36,7 @@ xgboost_imbalance:
 # DL-feature-matched XGBoost workflow
 xgboost:
   bundle_path: "dataset/amr_analysis_bundle.joblib"
+  output_dir: "xgboost/xgb_dl_matched_outputs_v1"
   device: "cuda"
   tree_method: "hist"
   n_jobs: -1
@@ -48,9 +50,16 @@ xgboost:
     - optuna
   n_folds: 5
   n_optuna_trials: 30
+  optuna_folds: 5
   threshold_objective: "mcc"
+  threshold_grid_size: 999
   n_bootstraps: 2000
+  bootstrap_confidence: 0.95
+  shap_sample_size: 5000
+  top_n_features: 30
+  top_n_dependence: 5
 
+# TabTransformer deep-learning workflow
 tabtransformer:
   epochs: 60
   batch_size: 512
@@ -60,3 +69,7 @@ tabtransformer:
   weight_decay: 0.0001
   model_path: "models/tabtransformer/amr_model.pt"
   bundle_path: "dataset/amr_analysis_bundle.joblib"
+  analysis_output_dir: "deep_learning/amr_analysis_outputs"
+  ablation_output_dir: "deep_learning/amr_ablation_study_outputs"
+  bootstrap_ci_output_dir: "deep_learning/baseline_ci_bootstrap_results_v2"
+  final_loss_output_dir: "deep_learning/baseline_final_loss_evaluation_v3"

@@ -91,8 +91,8 @@ _TT_CFG = _CFG.get('tabtransformer', {})
 MODEL_BUNDLE_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
 ANALYSIS_BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
-# New output directory and new output filenames, separate from prior analyses.
-OUTPUT_DIR = Path("amr_ablation_study_outputs")
+# #migrate: output directory from the single config file
+OUTPUT_DIR = Path(str(resolve_path(_TT_CFG.get('ablation_output_dir', 'deep_learning/amr_ablation_study_outputs'))))
 MODEL_OUTPUT_DIR = OUTPUT_DIR / "models"
 LOG_DIR = OUTPUT_DIR / "logs"
 

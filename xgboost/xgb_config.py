@@ -9,9 +9,9 @@ from config_loader import load_config, resolve_path
 _CFG = load_config()
 _XGB_CFG = _CFG.get('xgboost', {})
 
-# #migrate: bundle now lives in the shared dataset/ folder
+# #migrate: bundle and output paths from the single config file
 DL_BUNDLE_PATH = resolve_path(_XGB_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
-OUT = Path('xgb_dl_matched_outputs_v1')
+OUT = Path(str(resolve_path(_XGB_CFG.get('output_dir', 'xgboost/xgb_dl_matched_outputs_v1'))))
 MODEL_DIR = OUT/'models'; PRED_DIR = OUT/'predictions'; RESULT_DIR = OUT/'results'
 PLOT_DIR = OUT/'plots'; SHAP_DIR = OUT/'shap'; OPTUNA_DIR = OUT/'optuna'; LOG_DIR = OUT/'logs'
 RANDOM_SEED = _CFG.get('seed', 42)
@@ -29,7 +29,7 @@ BASE_XGB_PARAMS = dict(
 
 N_FOLDS = _XGB_CFG.get('n_folds', 5)
 N_OPTUNA_TRIALS = _XGB_CFG.get('n_optuna_trials', 30)
-OPTUNA_FOLDS = 5
+OPTUNA_FOLDS = _XGB_CFG.get('optuna_folds', 5)
 OPTUNA_TIMEOUT_SECONDS = None
 RUN_SMOTENC = True
 SMOTENC_SAMPLING_STRATEGY = 0.50
@@ -37,10 +37,10 @@ SMOTENC_K_NEIGHBORS = 5
 RUN_UNDERSAMPLING = True
 UNDERSAMPLING_STRATEGY = 1.0
 THRESHOLD_OBJECTIVE = _XGB_CFG.get('threshold_objective', 'mcc')
-THRESHOLD_GRID_SIZE = 999
+THRESHOLD_GRID_SIZE = _XGB_CFG.get('threshold_grid_size', 999)
 N_BOOTSTRAPS = _XGB_CFG.get('n_bootstraps', 2000)
-BOOTSTRAP_CONFIDENCE = 0.95
-SHAP_SAMPLE_SIZE = 5000
-TOP_N_FEATURES = 30
-TOP_N_DEPENDENCE = 5
+BOOTSTRAP_CONFIDENCE = _XGB_CFG.get('bootstrap_confidence', 0.95)
+SHAP_SAMPLE_SIZE = _XGB_CFG.get('shap_sample_size', 5000)
+TOP_N_FEATURES = _XGB_CFG.get('top_n_features', 30)
+TOP_N_DEPENDENCE = _XGB_CFG.get('top_n_dependence', 5)
 MODEL_SEQUENCE = _XGB_CFG.get('strategies', ['baseline','class_weighted','smotenc','undersampling','threshold_optimized','fivefold_cv','optuna'])

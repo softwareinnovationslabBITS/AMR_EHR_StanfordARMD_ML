@@ -83,8 +83,8 @@ _TT_CFG = _CFG.get('tabtransformer', {})
 MODEL_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
 ANALYSIS_BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
-# Completely new output directory and filenames.
-OUTPUT_DIR = Path("baseline_ci_bootstrap_results_v2")
+# #migrate: output directory from the single config file
+OUTPUT_DIR = Path(str(resolve_path(_TT_CFG.get('bootstrap_ci_output_dir', 'deep_learning/baseline_ci_bootstrap_results_v2'))))
 
 # Recommended final analysis: 2,000. Use 100 during an initial test run.
 N_BOOTSTRAPS = 2000

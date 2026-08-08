@@ -55,7 +55,7 @@ MODEL_PATH       = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer
 ANALYSIS_PATH    = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))  # splits + preprocessors (new format)
 LEGACY_PATH      = resolve_path('models/tabtransformer/amr_model_complete.pt')  # old single-file format (fallback)
 DATA_DIR         = resolve_path(_PATHS_CFG.get('dataset_dir', 'dataset'))  # change if needed
-OUT_DIR          = Path('./amr_analysis_outputs')
+OUT_DIR          = Path(str(resolve_path(_TT_CFG.get('analysis_output_dir', 'deep_learning/amr_analysis_outputs'))))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ── style ──────────────────────────────────────────────────────────────────────

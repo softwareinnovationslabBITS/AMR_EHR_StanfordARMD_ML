@@ -94,6 +94,21 @@ runs the pipeline must copy the raw CSV files into the `dataset/` folder. See
 `dataset/README.md` for the exact file list. Raw data and generated artifacts
 are Git-ignored.
 
+After a full run, the repository will contain these generated output
+locations (all Git-ignored):
+
+| Track | Output location | What is inside |
+|---|---|---|
+| Preprocessing | `dataset/amr_analysis_bundle.joblib` | shared splits + preprocessors |
+| Logistic regression | `logistic_regression/logistic_regression_dl_matched_outputs/` | metrics, plots, predictions |
+| XGBoost (DL-matched) | `xgboost/xgb_dl_matched_outputs_v1/` | models, predictions, results, plots, shap, optuna logs |
+| XGBoost (imbalance) | `xgboost/imbalance_handling/cache/`, `saved_models/`, `results/` | cached split, trained models, comparison log |
+| TabTransformer | `models/tabtransformer/amr_model.pt` | trained model weights |
+| TabTransformer analysis | `deep_learning/amr_analysis_outputs/` | SHAP, ROC/PR, calibration plots |
+| TabTransformer ablation | `deep_learning/amr_ablation_study_outputs/` | ablation metrics, histories, models |
+| Bootstrap CI | `deep_learning/baseline_ci_bootstrap_results_v2/` | confidence intervals, forest plots |
+| Final loss plot | `deep_learning/baseline_final_loss_evaluation_v3/` | loss curves and CSVs |
+
 After running `preprocessing/build_dl_features.py`, the same `dataset/` folder
 will also contain `amr_analysis_bundle.joblib`. This bundle is the shared
 preprocessed input for all three modeling tracks (logistic regression,

@@ -72,7 +72,8 @@ _TT_CFG = _CFG.get('tabtransformer', {})
 MODEL_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
 ANALYSIS_BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
-OUTPUT_DIR = Path("baseline_final_loss_evaluation_v3")
+# #migrate: output directory from the single config file
+OUTPUT_DIR = Path(str(resolve_path(_TT_CFG.get('final_loss_output_dir', 'deep_learning/baseline_final_loss_evaluation_v3'))))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # #migrate: batch size and seed from the single config file

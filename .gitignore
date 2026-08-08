@@ -21,6 +21,17 @@ models/**/*.joblib
 **/visualizations/
 **/results/
 
+# Workflow-specific output directories (mirror config.yaml)
+xgboost/imbalance_handling/cache/
+xgboost/imbalance_handling/saved_models/
+xgboost/imbalance_handling/results/
+xgboost/xgb_dl_matched_outputs_v1/
+logistic_regression/logistic_regression_dl_matched_outputs/
+deep_learning/amr_analysis_outputs/
+deep_learning/amr_ablation_study_outputs/
+deep_learning/baseline_ci_bootstrap_results_v2/
+deep_learning/baseline_final_loss_evaluation_v3/
+
 # Logs
 *.log
 *.pid
