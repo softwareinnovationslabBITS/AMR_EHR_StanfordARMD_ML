@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import warnings
 import gc
+import os
 import sys
 from pathlib import Path
 from sklearn.model_selection import train_test_split
@@ -10,17 +11,20 @@ import joblib
 
 warnings.filterwarnings('ignore')
 
-# #migrate: load split/seed settings from the single config file
+# #migrate: load split/seed/paths from the single config file
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from config_loader import load_config
+from config_loader import load_config, resolve_path
 
 _CFG = load_config()
 _SEED = _CFG.get('seed', 42)
 _SPLIT_CFG = _CFG.get('split', {})
+_PATHS_CFG = _CFG.get('paths', {})
 TEST_SIZE = _SPLIT_CFG.get('test_size', 0.15)
 VAL_SIZE = _SPLIT_CFG.get('val_size', 0.15)
 RANDOM_STATE = _SPLIT_CFG.get('random_state', _SEED)
+DATASET_DIR = str(resolve_path(_PATHS_CFG.get('dataset_dir', 'dataset')))
+BUNDLE_PATH = str(resolve_path(_PATHS_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib')))
 
 if __name__ == "__main__":
     print("=== Building DL feature bundle ===")
@@ -29,7 +33,8 @@ if __name__ == "__main__":
     # 1. Primary Cohort Loading
     # ---------------------------------------------------------
     print("Loading microbiology_cultures_cohort.csv...")
-    cohort = pd.read_csv("../dataset/microbiology_cultures_cohort.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    cohort = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_cohort.csv"))
     MERGE_KEY = 'order_proc_id_coded'
 
     df = cohort.copy()
@@ -56,7 +61,8 @@ if __name__ == "__main__":
 
     # --- Demographics ---
     print("Merging demographics...")
-    demographics = pd.read_csv("../dataset/microbiology_cultures_demographics.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    demographics = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_demographics.csv"))
     age_map = {'18-24 years': 1, '25-34 years': 2, '35-44 years': 3,
                '45-54 years': 4, '55-64 years': 5, '65-74 years': 6,
                '75-84 years': 7, '85-89 years': 8, '90+ years': 9}
@@ -75,7 +81,8 @@ if __name__ == "__main__":
 
     # --- Ward Info ---
     print("Merging ward info...")
-    ward_info = pd.read_csv("../dataset/microbiology_cultures_ward_info.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    ward_info = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_ward_info.csv"))
     ward_feat = ward_info[[MERGE_KEY, 'hosp_ward_IP', 'hosp_ward_OP', 'hosp_ward_ER', 'hosp_ward_ICU']].copy()
     ward_feat = ward_feat.drop_duplicates(MERGE_KEY)
 
@@ -88,7 +95,8 @@ if __name__ == "__main__":
 
     # --- Labs ---
     print("Merging labs...")
-    labs = pd.read_csv("../dataset/microbiology_cultures_labs.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    labs = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_labs.csv"))
     lab_cols = ['median_wbc', 'median_neutrophils', 'median_lymphocytes',
                 'median_hgb', 'median_plt', 'median_na', 'median_hco3',
                 'median_bun', 'median_cr', 'median_lactate', 'median_procalcitonin',
@@ -111,7 +119,8 @@ if __name__ == "__main__":
 
     # --- Vitals ---
     print("Merging vitals...")
-    vitals = pd.read_csv("../dataset/microbiology_cultures_vitals.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    vitals = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_vitals.csv"))
     vital_cols = ['median_heartrate', 'median_resprate', 'median_temp',
                   'median_sysbp', 'median_diasbp',
                   'first_heartrate', 'last_heartrate',
@@ -135,7 +144,8 @@ if __name__ == "__main__":
     # 2. INLINE Comorbidity Processing (No Chunking, No File Saving)
     # ---------------------------------------------------------
     print("Processing and merging comorbidities inline...")
-    comorb_raw = pd.read_csv('../dataset/microbiology_cultures_comorbidity.csv', low_memory=False)
+    # #migrate: dataset path from config (user copies files into data folder)
+    comorb_raw = pd.read_csv(os.path.join(DATASET_DIR, 'microbiology_cultures_comorbidity.csv'), low_memory=False)
 
     comorb_active = comorb_raw[comorb_raw['comorbidity_component_start_days_culture'] >= 0].copy()
     del comorb_raw
@@ -183,7 +193,8 @@ if __name__ == "__main__":
 
     # --- Antibiotic Exposures & Others ---
     print("Merging antibiotic exposures, prior orgs, procedures, etc...")
-    ab_class = pd.read_csv("../dataset/microbiology_cultures_antibiotic_class_exposure.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    ab_class = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_antibiotic_class_exposure.csv"))
     if 'antibiotic_class' in ab_class.columns:
         ab_class_pivot = pd.get_dummies(ab_class[[MERGE_KEY, 'antibiotic_class']].drop_duplicates(), columns=['antibiotic_class'], prefix='abclass')
         ab_class_agg = ab_class_pivot.groupby(MERGE_KEY).max().reset_index()
@@ -192,7 +203,8 @@ if __name__ == "__main__":
         for col in ab_class_cols: df[col] = df[col].fillna(0).astype(int)
     del ab_class; gc.collect()
 
-    ab_subtype = pd.read_csv("../dataset/microbiology_cultures_antibiotic_subtype_exposure.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    ab_subtype = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_antibiotic_subtype_exposure.csv"))
     if 'antibiotic_subtype_category' in ab_subtype.columns:
         ab_sub_pivot = pd.get_dummies(ab_subtype[[MERGE_KEY, 'antibiotic_subtype_category']].drop_duplicates(), columns=['antibiotic_subtype_category'], prefix='absub')
         ab_sub_agg = ab_sub_pivot.groupby(MERGE_KEY).max().reset_index()
@@ -201,7 +213,8 @@ if __name__ == "__main__":
         for col in ab_sub_cols: df[col] = df[col].fillna(0).astype(int)
     del ab_subtype; gc.collect()
 
-    prior_org = pd.read_csv("../dataset/microbiology_culture_prior_infecting_organism.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    prior_org = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_culture_prior_infecting_organism.csv"))
     if 'prior_organism' in prior_org.columns:
         prior_org_pivot = pd.get_dummies(prior_org[[MERGE_KEY, 'prior_organism']].drop_duplicates(), columns=['prior_organism'], prefix='priororg')
         prior_org_agg = prior_org_pivot.groupby(MERGE_KEY).max().reset_index()
@@ -210,7 +223,8 @@ if __name__ == "__main__":
         for col in prior_org_cols: df[col] = df[col].fillna(0).astype(int)
     del prior_org; gc.collect()
 
-    procedures = pd.read_csv("../dataset/microbiology_cultures_priorprocedures.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    procedures = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_priorprocedures.csv"))
     if 'procedure_description' in procedures.columns:
         proc_pivot = pd.get_dummies(procedures[[MERGE_KEY, 'procedure_description']].drop_duplicates(), columns=['procedure_description'], prefix='proc')
         proc_agg = proc_pivot.groupby(MERGE_KEY).max().reset_index()
@@ -219,7 +233,8 @@ if __name__ == "__main__":
         for col in proc_cols: df[col] = df[col].fillna(0).astype(int)
     del procedures; gc.collect()
 
-    nursing_home = pd.read_csv("../dataset/microbiology_cultures_nursing_home_visits.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    nursing_home = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_nursing_home_visits.csv"))
     if 'nursing_home_visit_culture' in nursing_home.columns:
         nh_feat = nursing_home[[MERGE_KEY, 'nursing_home_visit_culture']].copy()
         nh_feat = nh_feat.groupby(MERGE_KEY)['nursing_home_visit_culture'].max().reset_index()
@@ -228,7 +243,8 @@ if __name__ == "__main__":
         df['nursing_home_visits'] = df['nursing_home_visits'].fillna(0).astype(int)
     del nursing_home; gc.collect()
 
-    adi = pd.read_csv("../dataset/microbiology_cultures_adi_scores.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    adi = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_adi_scores.csv"))
     if 'adi_score' in adi.columns:
         adi_feat = adi[[MERGE_KEY, 'adi_score', 'adi_state_rank']].copy()
         adi_feat = adi_feat.drop_duplicates(MERGE_KEY)
@@ -239,7 +255,8 @@ if __name__ == "__main__":
         df['adi_state_rank'] = df['adi_state_rank'].fillna(5)
     del adi; gc.collect()
 
-    microbial_res = pd.read_csv("../dataset/microbiology_cultures_microbial_resistance.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    microbial_res = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_microbial_resistance.csv"))
     if 'resistant_time_to_culturetime' in microbial_res.columns:
         mres_feat = microbial_res[[MERGE_KEY, 'resistant_time_to_culturetime']].copy()
         mres_agg = mres_feat.groupby(MERGE_KEY)['resistant_time_to_culturetime'].agg(['count', 'min']).reset_index()
@@ -372,5 +389,6 @@ if __name__ == "__main__":
         'keys_test':         keys_test,
         'n_features_total':  len(ALL_FEATURES),
     }
-    joblib.dump(analysis_bundle, '../dataset/amr_analysis_bundle.joblib', compress=3)
-    print("Saved preprocessing bundle -> ../dataset/amr_analysis_bundle.joblib")
+    os.makedirs(os.path.dirname(BUNDLE_PATH), exist_ok=True)
+    joblib.dump(analysis_bundle, BUNDLE_PATH, compress=3)
+    print(f"Saved preprocessing bundle -> {BUNDLE_PATH}")

@@ -61,16 +61,24 @@ import matplotlib.pyplot as plt
 # 1. USER SETTINGS
 # =============================================================================
 
-# #migrate: artifact paths updated for repo structure
-MODEL_PATH = Path("../../models/tabtransformer/amr_model.pt")
-ANALYSIS_BUNDLE_PATH = Path("../../dataset/amr_analysis_bundle.joblib")
+# #migrate: artifact paths updated from the single config file
+import sys
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_TT_CFG = _CFG.get('tabtransformer', {})
+MODEL_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
+ANALYSIS_BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
 OUTPUT_DIR = Path("baseline_final_loss_evaluation_v3")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-BATCH_SIZE = 512
+# #migrate: batch size and seed from the single config file
+BATCH_SIZE = _TT_CFG.get('batch_size', 512)
 NUM_WORKERS = 0
-RANDOM_SEED = 42
+RANDOM_SEED = _CFG.get('seed', 42)
 
 # Use the same weighted BCE loss formulation as the original training script.
 USE_CLASS_WEIGHTED_LOSS = True

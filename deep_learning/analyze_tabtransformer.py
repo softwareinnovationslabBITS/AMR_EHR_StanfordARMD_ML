@@ -464,7 +464,8 @@ if __name__ == '__main__':
           f'(cont={len(CONT_FEATURES)}, bin={len(BINARY_FEATURES)}, cat={len(CAT_FEATURES)})')
 
     # ── 3. DataLoaders + predictions ──────────────────────────────────────────
-    B = 512
+    # #migrate: batch size from config (defaults to 512 to match training)
+    B = _TT_CFG.get('batch_size', 512)
     test_loader  = DataLoader(AMRDataset(X_test,  y_test,  cat_idx, cont_idx, bin_idx), batch_size=B)
     val_loader   = DataLoader(AMRDataset(X_val,   y_val,   cat_idx, cont_idx, bin_idx), batch_size=B)
     train_loader = DataLoader(AMRDataset(X_train, y_train, cat_idx, cont_idx, bin_idx), batch_size=B)

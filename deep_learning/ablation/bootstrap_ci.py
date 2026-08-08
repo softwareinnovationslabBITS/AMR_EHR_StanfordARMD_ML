@@ -72,9 +72,16 @@ import matplotlib.pyplot as plt
 # USER SETTINGS
 # =============================================================================
 
-# #migrate: artifact paths updated for repo structure
-MODEL_PATH = Path("../../models/tabtransformer/amr_model.pt")
-ANALYSIS_BUNDLE_PATH = Path("../../dataset/amr_analysis_bundle.joblib")
+# #migrate: artifact paths updated from the single config file
+import sys
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_TT_CFG = _CFG.get('tabtransformer', {})
+MODEL_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
+ANALYSIS_BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
 # Completely new output directory and filenames.
 OUTPUT_DIR = Path("baseline_ci_bootstrap_results_v2")

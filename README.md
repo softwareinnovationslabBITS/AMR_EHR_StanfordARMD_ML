@@ -1,15 +1,19 @@
 # AMR Prediction from EHR Data (Stanford-ARMD)
 
+<p align="center">
+  <b>Predicting antimicrobial resistance from longitudinal EHR data</b>
+</p>
+
 Code accompanying: **"Predicting antimicrobial resistance using electronic health
 record data: A machine learning analysis of the Stanford-ARMD dataset."**
 
 This repository contains the full pipeline used to train and evaluate
 logistic regression, optimized XGBoost, and TabTransformer deep-learning
 models for predicting antimicrobial resistance (AMR) from longitudinal EHR
-data. Each modeling track is kept in its own folder, and all tracks share a
-single preprocessing step and a single Python environment.
+data. Each modeling track is kept in its own folder, all tracks share a
+single preprocessing step, and all settings live in one configuration file.
 
-## Repository structure
+## What is in this repository
 
 ```
 AMR_EHR_StanfordARMD_ML/
@@ -75,6 +79,14 @@ pip install -r requirements.txt
 GPU (CUDA) is required only for the TabTransformer training step. The XGBoost
 and logistic-regression steps run on CPU.
 
+## Prerequisites
+
+- Python 3.10 or later
+- Enough free disk space for the raw CSV files and the generated bundle
+- A CUDA GPU is required only for the TabTransformer training and analysis
+  scripts; XGBoost and logistic regression will run on CPU
+- Docker is **not** used in this pipeline
+
 ## Data
 
 The ARMD-Stanford dataset is **not** included in this repository. The user who
@@ -89,6 +101,9 @@ XGBoost, and TabTransformer), so every model trains and evaluates on identical
 train / validation / test splits.
 
 ## Running the pipeline
+
+All commands below assume your virtual environment is activated and your
+working directory is the repository root.
 
 ### 1. Preprocessing (run once)
 
@@ -144,13 +159,24 @@ train/validation/test split sizes, XGBoost experiment settings, and
 TabTransformer training settings. Each script reads from this single config
 file via `config_loader.py`.
 
+Key sections in `config.yaml`:
+
+- `seed` - global random seed
+- `paths` - shared input/output directories
+- `split` - train/validation/test split sizes
+- `xgboost_imbalance` - seven-strategy imbalance-handling experiments
+- `xgboost` - DL-feature-matched XGBoost workflow
+- `tabtransformer` - TabTransformer training and analysis settings
+
 ## Reproducibility
 
-- A single fixed random seed is used throughout (`config/config.yaml: seed`).
+- A single fixed random seed is used throughout (`config.yaml: seed`).
 - The same `dataset/amr_analysis_bundle.joblib` is loaded by every modeling
 track, ensuring identical splits and preprocessing.
 - Feature engineering restricts predictors to information available before the
 relevant culture to prevent information leakage.
+- Path strings are read from `config.yaml` rather than hardcoded, so moving
+the repository or renaming the data folder only requires one edit.
 
 ## Citation
 

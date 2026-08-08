@@ -93,20 +93,22 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # 2. CONFIGURATION
 # ======================================================================
 
-# #migrate: load seed from the single config file
+# #migrate: load seed and bundle path from the single config file
 import sys
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from config_loader import load_config
+from config_loader import load_config, resolve_path
 
 _CFG = load_config()
 RANDOM_SEED = _CFG.get('seed', 42)
+BUNDLE_PATH = resolve_path(_CFG.get('tabtransformer', {}).get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
 # #migrate: add shared dataset/ folder to bundle search path
 BUNDLE_CANDIDATES = [
     Path("amr_analysis_bundle.joblib"),
     Path("../amr_analysis_bundle.joblib"),
     Path("../dataset/amr_analysis_bundle.joblib"),
+    BUNDLE_PATH,
 ]
 
 OUTPUT_DIR = Path("logistic_regression_dl_matched_outputs")
