@@ -1,5 +1,7 @@
 import warnings
 import gc
+import sys
+from pathlib import Path
 import joblib
 import numpy as np
 import torch
@@ -12,8 +14,24 @@ from sklearn.utils.class_weight import compute_class_weight
 
 warnings.filterwarnings('ignore')
 
+# #migrate: load training settings from the single config file
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_TT_CFG = _CFG.get('tabtransformer', {})
+
+BATCH_SIZE = _TT_CFG.get('batch_size', 512)
+NUM_EPOCHS = _TT_CFG.get('epochs', 60)
+PATIENCE = _TT_CFG.get('patience', 10)
+LEARNING_RATE = _TT_CFG.get('learning_rate', 3e-4)
+WEIGHT_DECAY = _TT_CFG.get('weight_decay', 1e-4)
+MODEL_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
+BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
+
 # #migrate: load preprocessing bundle produced by preprocessing/build_dl_features.py
-_bundle = joblib.load('../dataset/amr_analysis_bundle.joblib')
+_bundle = joblib.load(BUNDLE_PATH)
 CAT_FEATURES = _bundle['CAT_FEATURES']
 CONT_FEATURES = _bundle['CONT_FEATURES']
 BINARY_FEATURES = _bundle['BINARY_FEATURES']
@@ -37,7 +55,11 @@ print(f"Loaded bundle -> Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test:
 if __name__ == "__main__":
     print("=== Starting AMR Tabular Transformer Training ===")
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device_cfg = _TT_CFG.get('device', 'cuda')
+    if device_cfg == 'cuda' and not torch.cuda.is_available():
+        device = torch.device('cpu')
+    else:
+        device = torch.device(device_cfg)
     print(f"Using device: {device}\n")
 
     class AMRDataset(Dataset):
@@ -62,7 +84,6 @@ if __name__ == "__main__":
     val_dataset   = AMRDataset(X_val,   y_val)
     test_dataset  = AMRDataset(X_test,  y_test)
 
-    BATCH_SIZE = 512
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=0, pin_memory=True)
     val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
     test_loader  = DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False, num_workers=0)
@@ -185,14 +206,12 @@ if __name__ == "__main__":
     pos_weight_val = torch.tensor(class_weights[1] / class_weights[0], dtype=torch.float32).to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_val)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=10, T_mult=2, eta_min=1e-6)
 
     # ---------------------------------------------------------
     # 5. Training Loop
     # ---------------------------------------------------------
-    NUM_EPOCHS    = 60
-    PATIENCE      = 10
     best_val_auc  = 0.0
     patience_cnt  = 0
     best_model_wts = None
@@ -265,9 +284,9 @@ if __name__ == "__main__":
     }
     # #migrate: save trained model under models/tabtransformer/
     import os
-    os.makedirs('../models/tabtransformer', exist_ok=True)
-    torch.save(model_bundle, '../models/tabtransformer/amr_model.pt')
-    print("Saved model weights + architecture metadata -> ../models/tabtransformer/amr_model.pt")
+    os.makedirs(MODEL_PATH.parent, exist_ok=True)
+    torch.save(model_bundle, MODEL_PATH)
+    print(f"Saved model weights + architecture metadata -> {MODEL_PATH}")
 
     # ---- 6b. Everything else -> joblib --------------------------------------
     # joblib is the standard tool for this: it's pickle-based but with much
@@ -315,9 +334,9 @@ if __name__ == "__main__":
         'n_features_total':  len(ALL_FEATURES),
         'class_weights':     class_weights,
     }
-    joblib.dump(analysis_bundle, '../dataset/amr_analysis_bundle.joblib', compress=3)
-    print("Saved splits + preprocessors + metadata -> ../dataset/amr_analysis_bundle.joblib")
+    joblib.dump(analysis_bundle, BUNDLE_PATH, compress=3)
+    print(f"Saved splits + preprocessors + metadata -> {BUNDLE_PATH}")
 
     print("\nSUCCESS: training artifacts saved as:")
-    print("  - ../models/tabtransformer/amr_model.pt  (model weights + history)")
-    print("  - ../dataset/amr_analysis_bundle.joblib  (splits + preprocessors + feature schema)")
+    print(f"  - {MODEL_PATH}  (model weights + history)")
+    print(f"  - {BUNDLE_PATH}  (splits + preprocessors + feature schema)")

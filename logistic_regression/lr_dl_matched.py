@@ -93,7 +93,14 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # 2. CONFIGURATION
 # ======================================================================
 
-RANDOM_SEED = 42
+# #migrate: load seed from the single config file
+import sys
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config
+
+_CFG = load_config()
+RANDOM_SEED = _CFG.get('seed', 42)
 
 # #migrate: add shared dataset/ folder to bundle search path
 BUNDLE_CANDIDATES = [

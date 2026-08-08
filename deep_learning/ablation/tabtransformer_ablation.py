@@ -78,9 +78,18 @@ from torch.utils.data import DataLoader, Dataset
 # 1. USER CONFIGURATION
 # =============================================================================
 
+# #migrate: load settings from the single config file
+import sys
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_TT_CFG = _CFG.get('tabtransformer', {})
+
 # #migrate: artifact paths updated for repo structure
-MODEL_BUNDLE_PATH = Path("../../models/tabtransformer/amr_model.pt")
-ANALYSIS_BUNDLE_PATH = Path("../../dataset/amr_analysis_bundle.joblib")
+MODEL_BUNDLE_PATH = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))
+ANALYSIS_BUNDLE_PATH = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))
 
 # New output directory and new output filenames, separate from prior analyses.
 OUTPUT_DIR = Path("amr_ablation_study_outputs")
@@ -88,14 +97,14 @@ MODEL_OUTPUT_DIR = OUTPUT_DIR / "models"
 LOG_DIR = OUTPUT_DIR / "logs"
 
 # Reproducibility.
-RANDOM_SEED = 42
+RANDOM_SEED = _CFG.get('seed', 42)
 
 # Training settings. These mirror the original pipeline where possible.
-BATCH_SIZE = 512
-NUM_EPOCHS = 60
-EARLY_STOPPING_PATIENCE = 10
-LEARNING_RATE = 3e-4
-WEIGHT_DECAY = 1e-4
+BATCH_SIZE = _TT_CFG.get('batch_size', 512)
+NUM_EPOCHS = _TT_CFG.get('epochs', 60)
+EARLY_STOPPING_PATIENCE = _TT_CFG.get('patience', 10)
+LEARNING_RATE = _TT_CFG.get('learning_rate', 3e-4)
+WEIGHT_DECAY = _TT_CFG.get('weight_decay', 1e-4)
 GRADIENT_CLIP_NORM = 1.0
 NUM_WORKERS = 0
 

@@ -2,11 +2,25 @@ import pandas as pd
 import numpy as np
 import warnings
 import gc
+import sys
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 
 warnings.filterwarnings('ignore')
+
+# #migrate: load split/seed settings from the single config file
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config
+
+_CFG = load_config()
+_SEED = _CFG.get('seed', 42)
+_SPLIT_CFG = _CFG.get('split', {})
+TEST_SIZE = _SPLIT_CFG.get('test_size', 0.15)
+VAL_SIZE = _SPLIT_CFG.get('val_size', 0.15)
+RANDOM_STATE = _SPLIT_CFG.get('random_state', _SEED)
 
 if __name__ == "__main__":
     print("=== Building DL feature bundle ===")
@@ -311,7 +325,7 @@ if __name__ == "__main__":
     (X_train, X_test,
      y_train, y_test,
      keys_train, keys_test) = train_test_split(
-        X, y, merge_keys, test_size=0.15, stratify=y, random_state=42
+        X, y, merge_keys, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE
     )
 
     del X
@@ -320,7 +334,7 @@ if __name__ == "__main__":
     (X_train, X_val,
      y_train, y_val,
      keys_train, keys_val) = train_test_split(
-        X_train, y_train, keys_train, test_size=0.15, stratify=y_train, random_state=42
+        X_train, y_train, keys_train, test_size=VAL_SIZE, stratify=y_train, random_state=RANDOM_STATE
     )
 
     print(f"Split sizes -> Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test: {X_test.shape[0]}")

@@ -11,6 +11,9 @@ split:
 
 xgboost:
   bundle_path: "dataset/amr_analysis_bundle.joblib"
+  device: "cuda"
+  tree_method: "hist"
+  n_jobs: -1
   strategies:
     - baseline
     - class_weighted
@@ -29,5 +32,7 @@ tabtransformer:
   batch_size: 512
   device: "cuda"
   patience: 10
+  learning_rate: 0.0003
+  weight_decay: 0.0001
   model_path: "models/tabtransformer/amr_model.pt"
   bundle_path: "dataset/amr_analysis_bundle.joblib"

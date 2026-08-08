@@ -17,8 +17,8 @@ AMR_EHR_StanfordARMD_ML/
 ├── LICENSE
 ├── requirements.txt          # one shared Python environment
 ├── .gitignore
-├── config/
-│   └── config.yaml           # one main config file (paths, seed, model settings)
+├── config.yaml               # one main config file (paths, seed, model settings)
+├── config_loader.py          # helper used by all scripts to read config.yaml
 ├── dataset/
 │   └── README.md             # data must be copied here by the user
 ├── preprocessing/
@@ -139,10 +139,10 @@ python deep_learning/ablation/final_loss_plot.py
 
 ## Configuration
 
-All adjustable parameters live in `config/config.yaml`: the random seed,
+All adjustable parameters live in `config.yaml`: the random seed,
 train/validation/test split sizes, XGBoost experiment settings, and
 TabTransformer training settings. Each script reads from this single config
-file where applicable.
+file via `config_loader.py`.
 
 ## Reproducibility
 

@@ -17,6 +17,8 @@ Outputs: ./amr_analysis_outputs/  (13+ PNG files)
 """
 
 import os, gc, warnings
+import sys
+from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
@@ -39,12 +41,21 @@ import joblib
 
 warnings.filterwarnings('ignore')
 
+# #migrate: load settings from the single config file
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_TT_CFG = _CFG.get('tabtransformer', {})
+_PATHS_CFG = _CFG.get('paths', {})
+
 # ── paths ──────────────────────────────────────────────────────────────────────
-MODEL_PATH       = '../models/tabtransformer/amr_model.pt'  # weights + history (new format)
-ANALYSIS_PATH    = '../dataset/amr_analysis_bundle.joblib'  # splits + preprocessors (new format)
-LEGACY_PATH      = '../models/tabtransformer/amr_model_complete.pt'  # old single-file format (fallback)
-DATA_DIR         = '../dataset'                     # change if needed
-OUT_DIR          = './amr_analysis_outputs'
+MODEL_PATH       = resolve_path(_TT_CFG.get('model_path', 'models/tabtransformer/amr_model.pt'))  # weights + history (new format)
+ANALYSIS_PATH    = resolve_path(_TT_CFG.get('bundle_path', 'dataset/amr_analysis_bundle.joblib'))  # splits + preprocessors (new format)
+LEGACY_PATH      = resolve_path('models/tabtransformer/amr_model_complete.pt')  # old single-file format (fallback)
+DATA_DIR         = resolve_path(_PATHS_CFG.get('dataset_dir', 'dataset'))  # change if needed
+OUT_DIR          = Path('./amr_analysis_outputs')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # ── style ──────────────────────────────────────────────────────────────────────
@@ -355,8 +366,13 @@ def rebuild_dataset_from_csv(data_dir, all_features, cont_features, cat_features
 # MAIN
 # ══════════════════════════════════════════════════════════════════════════════
 if __name__ == '__main__':
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device_cfg = _TT_CFG.get('device', 'cuda')
+    if device_cfg == 'cuda' and not torch.cuda.is_available():
+        device = torch.device('cpu')
+    else:
+        device = torch.device(device_cfg)
     print(f'Device: {device}')
+    B = _TT_CFG.get('batch_size', 512)
 
     # ── 1. Load artifacts ──────────────────────────────────────────────────────
     #   PREFERRED: new two-file format — splits already saved, no CSV rebuild
