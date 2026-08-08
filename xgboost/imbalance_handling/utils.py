@@ -19,8 +19,10 @@ model and that script's own settings/results are saved per technique.
 
 import json
 import os
+import sys
 import time
 import joblib
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
@@ -32,8 +34,16 @@ from sklearn.metrics import (
     classification_report,
 )
 
-RESULTS_DIR = "./results"
-MODELS_DIR = "./saved_models"
+# #migrate: load output paths from the single config file
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_XGB_IMB_CFG = _CFG.get('xgboost_imbalance', {})
+
+RESULTS_DIR = str(resolve_path(_XGB_IMB_CFG.get('results_dir', 'xgboost/imbalance_handling/results')))
+MODELS_DIR = str(resolve_path(_XGB_IMB_CFG.get('saved_models_dir', 'xgboost/imbalance_handling/saved_models')))
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 RESULTS_LOG = os.path.join(RESULTS_DIR, "comparison_log.json")

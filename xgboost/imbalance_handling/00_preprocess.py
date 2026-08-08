@@ -30,9 +30,11 @@ import numpy as np
 import re
 import gc
 import os
+import sys
 import json
 import joblib
 import scipy.sparse as sp
+from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
@@ -45,8 +47,17 @@ from common import (
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
-TEST_SIZE = 0.2
-RANDOM_STATE = 42
+# #migrate: load split/seed settings from the single config file
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+from config_loader import load_config, resolve_path
+
+_CFG = load_config()
+_XGB_IMB_CFG = _CFG.get('xgboost_imbalance', {})
+SEED = _CFG.get('seed', 42)
+TEST_SIZE = _XGB_IMB_CFG.get('test_size', 0.2)
+RANDOM_STATE = _XGB_IMB_CFG.get('random_state', SEED)
+DATASET_DIR = str(resolve_path(_XGB_IMB_CFG.get('dataset_dir', 'dataset')))
 
 _cache_exists = all(
     os.path.exists(p)
@@ -63,7 +74,8 @@ else:
     # PHASE 1: LOAD AND PREPARE COHORT
     # ==========================================================================
     print("[LOG] Loading and Preparing Cohort Data...")
-    df_cohort = pd.read_csv("../../dataset/microbiology_cultures_cohort.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    df_cohort = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_cohort.csv"))
 
     valid_outcomes = ['Susceptible', 'Resistant', 'Intermediate']
     df_cohort = df_cohort[df_cohort['susceptibility'].isin(valid_outcomes)]
@@ -144,7 +156,8 @@ else:
         )
         return final.fillna(0)
 
-    abx_file = '../../dataset/microbiology_cultures_antibiotic_class_exposure.csv'
+    # #migrate: dataset path from config (user copies files into data folder)
+    abx_file = os.path.join(DATASET_DIR, 'microbiology_cultures_antibiotic_class_exposure.csv')
     df_abx = pd.read_csv(abx_file, usecols=['order_proc_id_coded', 'antibiotic_class', 'time_to_culturetime'])
     abx_features = generate_abx_features_optimized(df_abx)
 
@@ -155,10 +168,11 @@ else:
     # PHASE 3: WARD & DEMOGRAPHICS FEATURES
     # ==========================================================================
     print("[LOG] Extracting Ward & Demographic Features...")
-    df_ward = pd.read_csv("../../dataset/microbiology_cultures_ward_info.csv")
+    # #migrate: dataset path from config (user copies files into data folder)
+    df_ward = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_ward_info.csv"))
     ward_features = df_ward[['order_proc_id_coded', 'hosp_ward_IP', 'hosp_ward_OP', 'hosp_ward_ER', 'hosp_ward_ICU']]
 
-    df_demo = pd.read_csv("../../dataset/microbiology_cultures_demographics.csv")
+    df_demo = pd.read_csv(os.path.join(DATASET_DIR, "microbiology_cultures_demographics.csv"))
     df_demo['gender_binary'] = pd.to_numeric(df_demo['gender'], errors='coerce')
     age_midpoint_map = {
         '18-24 years': 21.0, '25-34 years': 29.5, '35-44 years': 39.5, '45-54 years': 49.5,
@@ -174,7 +188,8 @@ else:
     # PHASE 4: PRIOR PROCEDURES FEATURES
     # ==========================================================================
     print("[LOG] Processing Prior Procedures (Chunking)...")
-    proc_file = '../../dataset/microbiology_cultures_priorprocedures.csv'
+    # #migrate: dataset path from config (user copies files into data folder)
+    proc_file = os.path.join(DATASET_DIR, 'microbiology_cultures_priorprocedures.csv')
     proc_aggs = []
 
     def optimize_dtypes(df):
@@ -218,7 +233,8 @@ else:
     # PHASE 5: MICROBIAL RESISTANCE FEATURES
     # ==========================================================================
     print("[LOG] Processing Microbial Resistance Features...")
-    resist_file = '../../dataset/microbiology_cultures_microbial_resistance.csv'
+    # #migrate: dataset path from config (user copies files into data folder)
+    resist_file = os.path.join(DATASET_DIR, 'microbiology_cultures_microbial_resistance.csv')
     df_resist = pd.read_csv(resist_file, usecols=['order_proc_id_coded', 'antibiotic', 'resistant_time_to_culturetime'])
     df_resist['antibiotic'] = df_resist['antibiotic'].str.strip()
 
@@ -302,7 +318,8 @@ else:
         'ISO': 'Other_Antibiotic', 'ETH': 'Other_Antibiotic', 'SIL': 'Other_Antibiotic'
     }
 
-    df_meds = pd.read_csv('../../dataset/microbiology_cultures_prior_med.csv')
+    # #migrate: dataset path from config (user copies files into data folder)
+    df_meds = pd.read_csv(os.path.join(DATASET_DIR, 'microbiology_cultures_prior_med.csv'))
     df_meds['order_proc_id_coded'] = df_meds['order_proc_id_coded'].astype(str).str.replace(r'\.0$', '', regex=True)
     df_meds['abx_group'] = df_meds['medication_category'].map(med_map)
     df_meds = df_meds.dropna(subset=['abx_group'])
@@ -356,7 +373,8 @@ else:
     # ==========================================================================
     print("[LOG] Processing Comorbidities Features...")
 
-    df_comorb = pd.read_csv('../../dataset/microbiology_cultures_comorbidity.csv',
+    # #migrate: dataset path from config (user copies files into data folder)
+    df_comorb = pd.read_csv(os.path.join(DATASET_DIR, 'microbiology_cultures_comorbidity.csv'),
                              usecols=['order_proc_id_coded', 'comorbidity_component',
                                       'comorbidity_component_start_days_culture',
                                       'comorbidity_component_end_days_culture'])
@@ -513,7 +531,7 @@ else:
     with open(META_PATH, 'w') as f:
         json.dump(meta, f, indent=2)
 
-    print("[LOG] Cached preprocessed train/test split + preprocessor + meta to ./cache/")
+    print(f"[LOG] Cached preprocessed train/test split + preprocessor + meta to {CACHE_DIR}/")
     print(f"[LOG] X_train shape: {X_train.shape}  |  X_test shape: {X_test.shape}")
 
 if __name__ == "__main__":

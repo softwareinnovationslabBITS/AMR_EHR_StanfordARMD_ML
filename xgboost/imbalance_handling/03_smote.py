@@ -51,30 +51,34 @@ def main():
     X_train_imp = imputer.fit_transform(X_train)
     X_test_imp = imputer.transform(X_test)
 
+    # #migrate: SMOTE k_neighbors from the single config file
+    from common import RANDOM_STATE, SMOTE_K_NEIGHBORS
     print("[LOG] Running SMOTE on training data only...")
     t0 = time.time()
-    smote = SMOTE(random_state=42, k_neighbors=5)
+    smote = SMOTE(random_state=RANDOM_STATE, k_neighbors=SMOTE_K_NEIGHBORS)
     X_train_res, y_train_res = smote.fit_resample(X_train_imp, y_train)
     smote_elapsed = time.time() - t0
     print(f"[LOG] SMOTE resampling took {smote_elapsed:.1f}s")
 
     ratio_info = print_ratio_change("SMOTE (train set)", y_train, y_train_res)
 
+    # #migrate: use XGBoost params from the single config file
     t0 = time.time()
+    from common import N_ESTIMATORS, LEARNING_RATE, MAX_DEPTH, SUBSAMPLE, COLSAMPLE_BYTREE, EVAL_METRIC, N_JOBS, EARLY_STOPPING_ROUNDS, TREE_METHOD, DEVICE
     model = xgb.XGBClassifier(
         objective='binary:logistic',
         missing=np.nan,
-        n_estimators=2000,
-        learning_rate=0.02,
-        max_depth=8,
-        subsample=0.8,
-        colsample_bytree=0.7,
-        eval_metric='aucpr',
-        n_jobs=-1,
-        random_state=42,
-        early_stopping_rounds=50,
-        tree_method='hist',
-        device='cuda',
+        n_estimators=N_ESTIMATORS,
+        learning_rate=LEARNING_RATE,
+        max_depth=MAX_DEPTH,
+        subsample=SUBSAMPLE,
+        colsample_bytree=COLSAMPLE_BYTREE,
+        eval_metric=EVAL_METRIC,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE,
+        early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+        tree_method=TREE_METHOD,
+        device=DEVICE,
     )
     model.fit(X_train_res, y_train_res, eval_set=[(X_test_imp, y_test)], verbose=False)
     elapsed = time.time() - t0
@@ -95,7 +99,7 @@ def main():
 
     run_meta = {
         "method": METHOD_NAME,
-        "k_neighbors": 5,
+        "k_neighbors": SMOTE_K_NEIGHBORS,
         "sampling_strategy": "auto",
         "ratio_info": ratio_info,
         "best_iteration": int(model.best_iteration),

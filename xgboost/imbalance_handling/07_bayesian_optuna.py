@@ -46,18 +46,21 @@ try:
 except ImportError:
     from optuna.integration import XGBoostPruningCallback
 
+# #migrate: Optuna search constants from the single config file
 METHOD_NAME = "07_bayesian_optuna"
-N_TRIALS = 30
-N_SPLITS = 3
-RANDOM_STATE = 42
+from common import RANDOM_STATE, OPTUNA_N_TRIALS, OPTUNA_N_SPLITS
+N_TRIALS = OPTUNA_N_TRIALS
+N_SPLITS = OPTUNA_N_SPLITS
 
 
+# #migrate: use XGBoost device/tree_method from the single config file
 def objective(trial, X_train, y_train, base_ratio):
+    from common import EVAL_METRIC, TREE_METHOD, DEVICE
     params = {
         "objective": "binary:logistic",
-        "eval_metric": "aucpr",
-        "tree_method": "hist",
-        "device": "cuda",
+        "eval_metric": EVAL_METRIC,
+        "tree_method": TREE_METHOD,
+        "device": DEVICE,
         "max_depth": trial.suggest_int("max_depth", 4, 10),
         "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.1, log=True),
         "subsample": trial.suggest_float("subsample", 0.6, 1.0),
@@ -134,15 +137,23 @@ def main():
     best_params = study.best_params
     print("\n[LOG] Retraining final model on full training set with best hyperparameters...")
     t0 = time.time()
+    # #migrate: use XGBoost params from the single config file
+    from common import N_ESTIMATORS, LEARNING_RATE, MAX_DEPTH, SUBSAMPLE, COLSAMPLE_BYTREE, EVAL_METRIC, N_JOBS, EARLY_STOPPING_ROUNDS, TREE_METHOD, DEVICE
+    # Note: the Optuna search overrides most hyperparameters, but we still
+    # seed final_model with config defaults so unspecified params match config.
     final_model = xgb.XGBClassifier(
         objective="binary:logistic",
-        eval_metric="aucpr",
-        tree_method="hist",
-        device="cuda",
-        n_estimators=2000,
-        n_jobs=-1,
+        eval_metric=EVAL_METRIC,
+        tree_method=TREE_METHOD,
+        device=DEVICE,
+        n_estimators=N_ESTIMATORS,
+        learning_rate=LEARNING_RATE,
+        max_depth=MAX_DEPTH,
+        subsample=SUBSAMPLE,
+        colsample_bytree=COLSAMPLE_BYTREE,
+        n_jobs=N_JOBS,
         random_state=RANDOM_STATE,
-        early_stopping_rounds=50,
+        early_stopping_rounds=EARLY_STOPPING_ROUNDS,
         missing=np.nan,
         **best_params,
     )

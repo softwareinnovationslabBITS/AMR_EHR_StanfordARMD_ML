@@ -34,25 +34,29 @@ from utils import (
     print_classification_report, print_top_features, save_model_artifacts,
 )
 
+# #migrate: k-fold splits from the single config file
 METHOD_NAME = "06_kfold_cv"
-N_SPLITS = 3
+from common import RANDOM_STATE, KFOLD_N_SPLITS
+N_SPLITS = KFOLD_N_SPLITS
 
 
+# #migrate: use XGBoost params from the single config file
 def make_model():
+    from common import N_ESTIMATORS, LEARNING_RATE, MAX_DEPTH, SUBSAMPLE, COLSAMPLE_BYTREE, EVAL_METRIC, N_JOBS, EARLY_STOPPING_ROUNDS, TREE_METHOD, DEVICE
     return xgb.XGBClassifier(
         objective='binary:logistic',
         missing=np.nan,
-        n_estimators=2000,
-        learning_rate=0.02,
-        max_depth=8,
-        subsample=0.8,
-        colsample_bytree=0.7,
-        eval_metric='aucpr',
-        n_jobs=-1,
-        random_state=42,
-        early_stopping_rounds=50,
-        tree_method='hist',
-        device='cuda',
+        n_estimators=N_ESTIMATORS,
+        learning_rate=LEARNING_RATE,
+        max_depth=MAX_DEPTH,
+        subsample=SUBSAMPLE,
+        colsample_bytree=COLSAMPLE_BYTREE,
+        eval_metric=EVAL_METRIC,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE,
+        early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+        tree_method=TREE_METHOD,
+        device=DEVICE,
     )
 
 
@@ -60,7 +64,7 @@ def main():
     X_train, X_test, y_train, y_test, meta = load_cached_split()
     print(f"[LOG] Loaded cached split — X_train {X_train.shape}, X_test {X_test.shape}")
 
-    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=RANDOM_STATE)
     fold_metrics = []
 
     t0 = time.time()

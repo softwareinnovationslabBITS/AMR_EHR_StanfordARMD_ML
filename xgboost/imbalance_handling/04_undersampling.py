@@ -31,9 +31,11 @@ def main():
     X_train, X_test, y_train, y_test, meta = load_cached_split()
     print(f"[LOG] Loaded cached split — X_train {X_train.shape}, X_test {X_test.shape}")
 
+    # #migrate: random_state from the single config file
+    from common import RANDOM_STATE
     print("[LOG] Running Random Undersampling on training data only...")
     t0 = time.time()
-    rus = RandomUnderSampler(random_state=42)
+    rus = RandomUnderSampler(random_state=RANDOM_STATE)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
     rus_elapsed = time.time() - t0
     print(f"[LOG] Undersampling took {rus_elapsed:.2f}s")
@@ -42,21 +44,23 @@ def main():
     print(f"[LOG] Training rows: {X_train.shape[0]:,} -> {X_train_res.shape[0]:,} "
           f"(majority class cut down to match minority count)")
 
+    # #migrate: use XGBoost params from the single config file
     t0 = time.time()
+    from common import N_ESTIMATORS, LEARNING_RATE, MAX_DEPTH, SUBSAMPLE, COLSAMPLE_BYTREE, EVAL_METRIC, N_JOBS, EARLY_STOPPING_ROUNDS, TREE_METHOD, DEVICE
     model = xgb.XGBClassifier(
         objective='binary:logistic',
         missing=np.nan,
-        n_estimators=2000,
-        learning_rate=0.02,
-        max_depth=8,
-        subsample=0.8,
-        colsample_bytree=0.7,
-        eval_metric='aucpr',
-        n_jobs=-1,
-        random_state=42,
-        early_stopping_rounds=50,
-        tree_method='hist',
-        device='cuda',
+        n_estimators=N_ESTIMATORS,
+        learning_rate=LEARNING_RATE,
+        max_depth=MAX_DEPTH,
+        subsample=SUBSAMPLE,
+        colsample_bytree=COLSAMPLE_BYTREE,
+        eval_metric=EVAL_METRIC,
+        n_jobs=N_JOBS,
+        random_state=RANDOM_STATE,
+        early_stopping_rounds=EARLY_STOPPING_ROUNDS,
+        tree_method=TREE_METHOD,
+        device=DEVICE,
     )
     model.fit(X_train_res, y_train_res, eval_set=[(X_test, y_test)], verbose=False)
     elapsed = time.time() - t0
