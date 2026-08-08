@@ -1,3 +1,4 @@
+# Source: /AMR_Stanford/DL_codes/amr_project/xgb_dl_feature_matched_project/run_all_xgb_dl_matched.py
 """Run training, comparison and best-model analysis in sequence."""
 import subprocess,sys,time
 SCRIPTS=['01_train_xgb_variations.py','03_compare_xgb_models.py','02_analyze_best_xgb.py']

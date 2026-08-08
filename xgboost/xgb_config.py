@@ -1,3 +1,4 @@
+# Source: /AMR_Stanford/DL_codes/amr_project/xgb_dl_feature_matched_project/xgb_config.py
 """Configuration for DL-feature-matched XGBoost workflow."""
 import sys
 from pathlib import Path

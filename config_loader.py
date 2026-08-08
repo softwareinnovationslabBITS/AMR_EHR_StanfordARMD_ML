@@ -1,3 +1,4 @@
+# Source: created in repo, no external source
 """Central config loader for the repository.
 
 All scripts resolve config.yaml relative to the repository root so they can be
