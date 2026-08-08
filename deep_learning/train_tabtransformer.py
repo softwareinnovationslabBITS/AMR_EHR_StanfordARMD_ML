@@ -26,6 +26,12 @@ cat_embed_dims = _bundle['cat_embed_dims']
 MERGE_KEY = _bundle['MERGE_KEY']
 X_train, X_val, X_test = _bundle['X_train'], _bundle['X_val'], _bundle['X_test']
 y_train, y_val, y_test = _bundle['y_train'], _bundle['y_val'], _bundle['y_test']
+scaler = _bundle['scaler']
+org_le = _bundle['org_le']
+ab_le = _bundle['ab_le']
+keys_train = _bundle['keys_train']
+keys_val = _bundle['keys_val']
+keys_test = _bundle['keys_test']
 print(f"Loaded bundle -> Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test: {X_test.shape[0]}")
 
 if __name__ == "__main__":
@@ -34,7 +40,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}\n")
 
-class AMRDataset(Dataset):
+    class AMRDataset(Dataset):
         def __init__(self, X, y):
             self.X_cat  = torch.LongTensor(X[:, cat_idx].astype(np.int64))
             self.X_cont = torch.FloatTensor(X[:, cont_idx].astype(np.float32))
@@ -309,8 +315,8 @@ class AMRDataset(Dataset):
         'n_features_total':  len(ALL_FEATURES),
         'class_weights':     class_weights,
     }
-    joblib.dump(analysis_bundle, 'amr_analysis_bundle.joblib', compress=3)
-    print("Saved splits + preprocessors + metadata -> amr_analysis_bundle.joblib")
+    joblib.dump(analysis_bundle, '../dataset/amr_analysis_bundle.joblib', compress=3)
+    print("Saved splits + preprocessors + metadata -> ../dataset/amr_analysis_bundle.joblib")
 
     print("\nSUCCESS: training artifacts saved as:")
     print("  - ../models/tabtransformer/amr_model.pt  (model weights + history)")
