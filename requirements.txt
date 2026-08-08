@@ -1,0 +1,27 @@
+# Core
+numpy
+pandas
+pyyaml
+
+# Classical ML
+scikit-learn
+xgboost>=3.0
+imbalanced-learn      # SMOTE, random undersampling
+optuna                # Bayesian hyperparameter optimization (TPE sampler)
+scipy
+
+# Interpretability
+shap
+
+# Deep learning (TabTransformer)
+torch                 # install the CUDA build matching your GPU/driver
+
+# Evaluation / visualization
+matplotlib
+seaborn
+
+# Persistence
+joblib
+
+# Dev / testing
+pytest

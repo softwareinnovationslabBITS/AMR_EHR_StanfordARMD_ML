@@ -1,0 +1,82 @@
+"""
+01_baseline_xgb.py
+-------------------
+Item 1 (implicit baseline): plain XGBoost, NO imbalance handling at all.
+This is the control group every other technique gets compared against.
+
+Run 00_common.py first.
+
+Saves model + metadata to ./saved_models/01_baseline/ (mirrors your
+original MODEL_PATH / META_PATH save pattern) and prints the full
+classification report + top-15 feature importances, same as your
+original Phase 11 evaluation block.
+"""
+
+import time
+import joblib
+import numpy as np
+import xgboost as xgb
+from common import load_cached_split, PREPROCESSOR_PATH
+from utils import (
+    compute_metrics, print_report, log_result,
+    print_classification_report, print_top_features, save_model_artifacts,
+)
+
+METHOD_NAME = "01_baseline"
+
+
+def main():
+    X_train, X_test, y_train, y_test, meta = load_cached_split()
+    print(f"[LOG] Loaded cached split — X_train {X_train.shape}, X_test {X_test.shape}")
+
+    t0 = time.time()
+    model = xgb.XGBClassifier(
+        objective='binary:logistic',
+        missing=np.nan,
+        n_estimators=2000,
+        learning_rate=0.02,
+        max_depth=8,
+        subsample=0.8,
+        colsample_bytree=0.7,
+        eval_metric='aucpr',
+        n_jobs=-1,
+        random_state=42,
+        early_stopping_rounds=50,
+        tree_method='hist',
+        device='cuda',
+    )
+    model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+    elapsed = time.time() - t0
+
+    y_prob = model.predict_proba(X_test)[:, 1]
+    y_pred = model.predict(X_test)
+
+    metrics = compute_metrics(y_test, y_pred, y_prob)
+    print_report(METHOD_NAME, metrics, extra={"best_iteration": model.best_iteration}, elapsed=elapsed)
+    print_classification_report(y_test, y_pred)
+
+    preprocessor = joblib.load(PREPROCESSOR_PATH)
+    feat_imp_df = print_top_features(model, preprocessor, meta['cat_cols'], meta['num_cols'])
+
+    run_meta = {
+        "method": METHOD_NAME,
+        "scale_pos_weight": 1.0,
+        "best_iteration": int(model.best_iteration),
+        "metrics": metrics,
+        "elapsed_sec": elapsed,
+        "cat_cols": meta['cat_cols'],
+        "num_cols": meta['num_cols'],
+    }
+    save_model_artifacts(METHOD_NAME, model, run_meta, feat_imp_df)
+    log_result(METHOD_NAME, metrics, params={"scale_pos_weight": 1.0}, elapsed=elapsed)
+
+
+# ==============================================================================
+# CONVENIENCE: LOAD-ONLY HELPER (paste into any analysis notebook)
+# ==============================================================================
+# from utils import load_model_artifacts
+# model, meta = load_model_artifacts("01_baseline")
+# print("[LOG] Model and metadata loaded successfully!")
+
+if __name__ == "__main__":
+    main()

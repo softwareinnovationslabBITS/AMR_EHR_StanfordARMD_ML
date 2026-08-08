@@ -1,0 +1,33 @@
+seed: 42
+
+paths:
+  dataset_dir: "dataset"
+  models_dir: "models"
+
+split:
+  test_size: 0.15
+  val_size: 0.15
+  random_state: 42
+
+xgboost:
+  bundle_path: "dataset/amr_analysis_bundle.joblib"
+  strategies:
+    - baseline
+    - class_weighted
+    - smotenc
+    - undersampling
+    - threshold_optimized
+    - fivefold_cv
+    - optuna
+  n_folds: 5
+  n_optuna_trials: 30
+  threshold_objective: "mcc"
+  n_bootstraps: 2000
+
+tabtransformer:
+  epochs: 60
+  batch_size: 512
+  device: "cuda"
+  patience: 10
+  model_path: "models/tabtransformer/amr_model.pt"
+  bundle_path: "dataset/amr_analysis_bundle.joblib"

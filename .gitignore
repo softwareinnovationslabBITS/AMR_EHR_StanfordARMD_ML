@@ -1,0 +1,51 @@
+# Data (never commit patient-level data)
+dataset/*.csv
+dataset/*.joblib
+!dataset/README.md
+
+# Model artifacts (usually too large / regenerable)
+models/**/*.pt
+models/**/*.ubj
+models/**/*.joblib
+!models/**/.gitkeep
+
+# Generated output directories
+**/cache/
+**/saved_models/
+**/xgb_dl_matched_outputs_v1/
+**/logistic_regression_dl_matched_outputs/
+**/amr_ablation_study_outputs/
+**/baseline_ci_bootstrap_results_v2/
+**/baseline_final_loss_evaluation_v3/
+**/amr_analysis_outputs/
+**/visualizations/
+**/results/
+
+# Logs
+*.log
+*.pid
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Optuna
+*.db
+optuna_studies/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Env
+.env
