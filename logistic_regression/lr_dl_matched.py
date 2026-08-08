@@ -113,6 +113,7 @@ BUNDLE_CANDIDATES = [
 ]
 
 # #migrate: output directory from the single config file
+_PATHS_CFG = _CFG.get('paths', {})
 OUTPUT_DIR = Path(str(resolve_path(_PATHS_CFG.get('logistic_regression_output_dir', 'logistic_regression/logistic_regression_dl_matched_outputs'))))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
