@@ -14,30 +14,33 @@ Usage:
 import subprocess
 import sys
 import time
+from pathlib import Path
 
+# #migrate: resolve scripts relative to this file so the runner works from any cwd
+_HERE = Path(__file__).resolve().parent
 SCRIPTS = [
-    "00_common.py",
-    "01_baseline_xgb.py",
-    "02_class_weights.py",
-    "03_smote.py",
-    "04_undersampling.py",
-    "05_threshold_optimization.py",
-    "06_kfold_cv.py",
-    "07_bayesian_optuna.py",
+    _HERE / "00_common.py",
+    _HERE / "01_baseline_xgb.py",
+    _HERE / "02_class_weights.py",
+    _HERE / "03_smote.py",
+    _HERE / "04_undersampling.py",
+    _HERE / "05_threshold_optimization.py",
+    _HERE / "06_kfold_cv.py",
+    _HERE / "07_bayesian_optuna.py",
 ]
 
 
 def run_script(path):
     print("\n" + "#" * 70)
-    print(f"#  RUNNING: {path}")
+    print(f"#  RUNNING: {path.name}")
     print("#" * 70)
     t0 = time.time()
-    result = subprocess.run([sys.executable, path])
+    result = subprocess.run([sys.executable, str(path)], cwd=str(_HERE))
     elapsed = time.time() - t0
     if result.returncode != 0:
-        print(f"[WARN] {path} exited with code {result.returncode} after {elapsed:.1f}s — continuing.")
+        print(f"[WARN] {path.name} exited with code {result.returncode} after {elapsed:.1f}s — continuing.")
     else:
-        print(f"[OK] {path} finished in {elapsed:.1f}s")
+        print(f"[OK] {path.name} finished in {elapsed:.1f}s")
 
 
 def main():
@@ -55,7 +58,7 @@ def main():
     if not df.empty:
         print("\nFINAL COMPARISON TABLE (sorted by MCC, descending):\n")
         print(df.to_string(index=False))
-        df.to_csv("./results/comparison_table.csv", index=False)
+        df.to_csv(_HERE / "results" / "comparison_table.csv", index=False)
         print("\n[LOG] Saved -> ./results/comparison_table.csv")
     else:
         print("[WARN] No results were logged — check individual script output above.")
