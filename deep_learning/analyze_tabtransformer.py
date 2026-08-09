@@ -18,6 +18,7 @@ Outputs: ./amr_analysis_outputs/  (13+ PNG files)
 """
 
 import os, gc, warnings
+import logging
 import sys
 from pathlib import Path
 import numpy as np
@@ -58,6 +59,13 @@ LEGACY_PATH      = resolve_path('models/tabtransformer/amr_model_complete.pt')  
 DATA_DIR         = resolve_path(_PATHS_CFG.get('dataset_dir', 'dataset'))  # change if needed
 OUT_DIR          = Path(str(resolve_path(_TT_CFG.get('analysis_output_dir', 'deep_learning/amr_analysis_outputs'))))
 os.makedirs(OUT_DIR, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # ── style ──────────────────────────────────────────────────────────────────────
 plt.rcParams.update({'figure.dpi': 150, 'font.family': 'DejaVu Sans',
@@ -372,7 +380,7 @@ if __name__ == '__main__':
         device = torch.device('cpu')
     else:
         device = torch.device(device_cfg)
-    print(f'Device: {device}')
+    logger.info("Using device: %s", device)
     B = _TT_CFG.get('batch_size', 512)
 
     # ── 1. Load artifacts ──────────────────────────────────────────────────────
@@ -382,7 +390,7 @@ if __name__ == '__main__':
     use_new_format = os.path.exists(MODEL_PATH) and os.path.exists(ANALYSIS_PATH)
 
     if use_new_format:
-        print(f'Loading {MODEL_PATH} + {ANALYSIS_PATH} (new format)...')
+        logger.info("Loading %s + %s (new format)", MODEL_PATH, ANALYSIS_PATH)
         model_bundle    = torch.load(MODEL_PATH, map_location='cpu', weights_only=False)
         analysis_bundle = joblib.load(ANALYSIS_PATH)
 
@@ -403,14 +411,14 @@ if __name__ == '__main__':
         model = AMRTabTransformer(cat_cardinalities, cat_embed_dims, n_cont, n_bin).to(device)
         model.load_state_dict(model_bundle['model_state_dict'])
         model.eval()
-        print('Model loaded.')
+        logger.info("Model loaded.")
 
         cat_idx  = list(range(len(CAT_FEATURES)))
         cont_idx = list(range(len(CAT_FEATURES), len(CAT_FEATURES) + len(CONT_FEATURES)))
         bin_idx  = list(range(len(CAT_FEATURES) + len(CONT_FEATURES), len(ALL_FEATURES)))
 
         # ── splits: loaded directly, no rebuild, no drift risk ──
-        print('Loading splits from joblib bundle (no CSV rebuild needed)...')
+        logger.info("Loading splits from joblib bundle (no CSV rebuild needed)")
         X_train = analysis_bundle['X_train'].astype(np.float32)
         X_val   = analysis_bundle['X_val'].astype(np.float32)
         X_test  = analysis_bundle['X_test'].astype(np.float32)
@@ -419,7 +427,7 @@ if __name__ == '__main__':
         y_test  = analysis_bundle['y_test'].astype(np.float32)
 
     else:
-        print(f'New-format files not found — falling back to legacy {LEGACY_PATH} ...')
+        logger.warning("New-format files not found — falling back to legacy %s", LEGACY_PATH)
         bundle = torch.load(LEGACY_PATH, map_location='cpu', weights_only=False)
         training_history = None  # legacy bundle never saved per-epoch history
 
@@ -438,14 +446,14 @@ if __name__ == '__main__':
         model = AMRTabTransformer(cat_cardinalities, cat_embed_dims, n_cont, n_bin).to(device)
         model.load_state_dict(bundle['model_state_dict'])
         model.eval()
-        print('Model loaded.')
+        logger.info("Model loaded.")
 
         cat_idx  = list(range(len(CAT_FEATURES)))
         cont_idx = list(range(len(CAT_FEATURES), len(CAT_FEATURES) + len(CONT_FEATURES)))
         bin_idx  = list(range(len(CAT_FEATURES) + len(CONT_FEATURES), len(ALL_FEATURES)))
 
         if 'X_test' in bundle:
-            print('Loading splits from legacy bundle (fast path)...')
+            logger.info("Loading splits from legacy bundle (fast path)")
             X_train = bundle['X_train'].astype(np.float32)
             X_val   = bundle['X_val'].astype(np.float32)
             X_test  = bundle['X_test'].astype(np.float32)
@@ -453,13 +461,13 @@ if __name__ == '__main__':
             y_val   = bundle['y_val'].astype(np.float32)
             y_test  = bundle['y_test'].astype(np.float32)
         else:
-            print('Splits not in legacy bundle -- rebuilding from CSVs...')
+            logger.info("Splits not in legacy bundle — rebuilding from CSVs")
             X_train, X_val, X_test, y_train, y_val, y_test = rebuild_dataset_from_csv(
                 DATA_DIR, ALL_FEATURES, CONT_FEATURES, CAT_FEATURES,
                 BINARY_FEATURES, scaler, org_le, ab_le
             )
 
-    print(f'Splits → Train: {len(y_train):,}  Val: {len(y_val):,}  Test: {len(y_test):,}')
+    logger.info("Splits -> Train: %d  Val: %d  Test: %d", len(y_train), len(y_val), len(y_test))
     print(f'  [diagnostic] X_test shape: {X_test.shape} | y_test positive rate: {y_test.mean():.4f}')
     print(f'  [diagnostic] Bundle expects {len(ALL_FEATURES)} features '
           f'(cont={len(CONT_FEATURES)}, bin={len(BINARY_FEATURES)}, cat={len(CAT_FEATURES)})')
@@ -479,19 +487,20 @@ if __name__ == '__main__':
     test_auprc = average_precision_score(test_labels, test_probs)
     val_auc    = roc_auc_score(val_labels,  val_probs)
     train_auc  = roc_auc_score(train_labels, train_probs)
-    print(f'\nTrain AUC: {train_auc:.4f} | Val AUC: {val_auc:.4f} | Test AUC: {test_auc:.4f} | AUPRC: {test_auprc:.4f}')
+    logger.info("Train AUC: %.4f | Val AUC: %.4f | Test AUC: %.4f | AUPRC: %.4f",
+                train_auc, val_auc, test_auc, test_auprc)
 
     thresholds  = np.linspace(0.01, 0.99, 200)
     f1s         = [f1_score(test_labels, (test_probs >= t).astype(int), zero_division=0) for t in thresholds]
     best_thresh = thresholds[np.argmax(f1s)]
     test_preds  = (test_probs >= best_thresh).astype(int)
-    print(f'Best F1 threshold: {best_thresh:.3f}  (F1={max(f1s):.4f})')
+    logger.info("Best F1 threshold: %.3f  (F1=%.4f)", best_thresh, max(f1s))
 
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 0 — Training curves (only available with new-format bundle)
     # ══════════════════════════════════════════════════════════════════════════
     if training_history is not None and len(training_history.get('train_loss', [])) > 0:
-        print('[0/9] Training curves...')
+        logger.info("[0/9] Training curves...")
         epochs = range(1, len(training_history['train_loss']) + 1)
         fig, axes = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -511,12 +520,12 @@ if __name__ == '__main__':
         plt.savefig(f'{OUT_DIR}/00_training_curves.png', bbox_inches='tight')
         plt.close()
     else:
-        print('[0/9] Training curves skipped (no history in legacy bundle).')
+        logger.info("[0/9] Training curves skipped (no history in legacy bundle).")
 
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 1 — ROC & PR
     # ══════════════════════════════════════════════════════════════════════════
-    print('\n[1/9] ROC & PR curves...')
+    logger.info("[1/9] ROC & PR curves...")
     fpr, tpr, _ = roc_curve(test_labels, test_probs)
     prec, rec, _ = precision_recall_curve(test_labels, test_probs)
 
@@ -539,7 +548,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 2 — Confusion Matrix
     # ══════════════════════════════════════════════════════════════════════════
-    print('[2/9] Confusion matrix...')
+    logger.info("[2/9] Confusion matrix...")
     cm      = confusion_matrix(test_labels, test_preds)
     cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
 
@@ -560,7 +569,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 3 — Threshold analysis
     # ══════════════════════════════════════════════════════════════════════════
-    print('[3/9] Threshold analysis...')
+    logger.info("[3/9] Threshold analysis...")
     precs = [precision_score(test_labels, (test_probs>=t).astype(int), zero_division=0) for t in thresholds]
     recs_ = [recall_score(test_labels,    (test_probs>=t).astype(int), zero_division=0) for t in thresholds]
 
@@ -578,7 +587,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 4 — Score distributions
     # ══════════════════════════════════════════════════════════════════════════
-    print('[4/9] Score distributions...')
+    logger.info("[4/9] Score distributions...")
     fig, axes = plt.subplots(1, 2, figsize=(13, 5))
     for ax, (probs, labels, split) in zip(axes, [
             (test_probs,  test_labels,  'Test'),
@@ -594,7 +603,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 5 — Calibration
     # ══════════════════════════════════════════════════════════════════════════
-    print('[5/9] Calibration curve...')
+    logger.info("[5/9] Calibration curve...")
     fp, mp = calibration_curve(test_labels, test_probs, n_bins=15)
     fig, ax = plt.subplots(figsize=(7, 6))
     ax.plot([0,1],[0,1],'k--',lw=1,label='Perfect')
@@ -608,7 +617,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 6 — Per-class metrics heatmap
     # ══════════════════════════════════════════════════════════════════════════
-    print('[6/9] Per-class metrics...')
+    logger.info("[6/9] Per-class metrics...")
     rep = classification_report(test_labels, test_preds,
                                 target_names=['Susceptible','Resistant'], output_dict=True)
     mdf = (pd.DataFrame(rep).T
@@ -624,7 +633,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 7 — SHAP
     # ══════════════════════════════════════════════════════════════════════════
-    print('[7/9] SHAP values (may take a few minutes)...')
+    logger.info("[7/9] SHAP values (may take a few minutes)...")
     N_BG, N_EVAL = 200, 500
 
     flat = FlatWrapper(model, cat_idx, cont_idx, bin_idx).to(device)
@@ -656,15 +665,15 @@ if __name__ == '__main__':
     for name, fn in [('GradientExplainer', run_gradient),
                      ('DeepExplainer(no_check)', run_deep_nocheck)]:
         try:
-            print(f'  Trying {name}...')
+            logger.info("  Trying %s...", name)
             sv = fn(flat, X_bg, X_ev)
-            print(f'  {name} succeeded.')
+            logger.info("  %s succeeded.", name)
             break
         except Exception as e:
-            print(f'  {name} failed: {e}')
+            logger.warning("  %s failed: %s", name, e)
 
     if sv is None:
-        print('  All SHAP strategies failed — skipping SHAP plots.')
+        logger.warning("All SHAP strategies failed — skipping SHAP plots.")
     else:
         feat_names    = ALL_FEATURES
         mean_abs      = np.abs(sv).mean(axis=0)
@@ -716,9 +725,8 @@ if __name__ == '__main__':
         reconstructed_logit = base_val_logit + sv[hi].sum()
         reconstructed_prob  = 1 / (1 + np.exp(-reconstructed_logit))
         actual_prob         = test_probs[ev_idx[hi]]
-        print(f'  [SHAP sanity check] reconstructed P={reconstructed_prob:.4f} '
-              f'vs actual P={actual_prob:.4f} '
-              f'(diff={abs(reconstructed_prob - actual_prob):.4f})')
+        logger.info("  [SHAP sanity check] reconstructed P=%.4f vs actual P=%.4f (diff=%.4f)",
+                    reconstructed_prob, actual_prob, abs(reconstructed_prob - actual_prob))
 
         plt.figure(figsize=(10, 8))
         shap.waterfall_plot(exp_obj, max_display=20, show=False)
@@ -745,7 +753,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 8 — Embedding t-SNE
     # ══════════════════════════════════════════════════════════════════════════
-    print('[8/9] Embedding t-SNE...')
+    logger.info("[8/9] Embedding t-SNE...")
     for feat_idx, feat_name, le_obj in [
         (CAT_FEATURES.index('organism_enc'),   'Organism',   org_le),
         (CAT_FEATURES.index('antibiotic_enc'), 'Antibiotic', ab_le),
@@ -773,7 +781,7 @@ if __name__ == '__main__':
     # ══════════════════════════════════════════════════════════════════════════
     # PLOT 9 — Summary dashboard
     # ══════════════════════════════════════════════════════════════════════════
-    print('[9/9] Summary dashboard...')
+    logger.info("[9/9] Summary dashboard...")
     fig = plt.figure(figsize=(16, 10))
     gs  = gridspec.GridSpec(2, 3, figure=fig, hspace=0.4, wspace=0.35)
 
@@ -826,14 +834,9 @@ if __name__ == '__main__':
     plt.close()
 
     # ── done ───────────────────────────────────────────────────────────────────
-    print('\n' + '='*60)
-    print('OUTPUTS:', os.path.abspath(OUT_DIR))
-    print('='*60)
-    for f in sorted(os.listdir(OUT_DIR)):
-        print(f'  {f}')
-    print(f'\n  Train AUC : {train_auc:.4f}')
-    print(f'  Val   AUC : {val_auc:.4f}')
-    print(f'  Test  AUC : {test_auc:.4f}')
-    print(f'  AUPRC     : {test_auprc:.4f}')
-    print(f'  Best F1   : {max(f1s):.4f}  @ thr={best_thresh:.3f}')
-    print('='*60)
+    logger.info("OUTPUTS: %s", os.path.abspath(OUT_DIR))
+    logger.info("  Train AUC : %.4f", train_auc)
+    logger.info("  Val   AUC : %.4f", val_auc)
+    logger.info("  Test  AUC : %.4f", test_auc)
+    logger.info("  AUPRC     : %.4f", test_auprc)
+    logger.info("  Best F1   : %.4f  @ thr=%.3f", max(f1s), best_thresh)

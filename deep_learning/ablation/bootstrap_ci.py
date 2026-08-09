@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import gc
 import json
+import logging
 import os
 import random
 import sys
@@ -64,9 +65,17 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader, Dataset
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+# #migrate: split bootstrap CI and plotting helpers into private modules
+from ablation_bootstrap import run_stratified_bootstrap, summarize_bootstrap
+from ablation_plot_results import create_manuscript_table, make_distribution_plot, make_forest_plot
+
+# #migrate: configure timestamped progress logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -442,259 +451,13 @@ def calculate_metrics(
 # =============================================================================
 # BOOTSTRAP
 # =============================================================================
-
-def run_stratified_bootstrap(
-    y_true: np.ndarray,
-    y_prob: np.ndarray,
-    threshold: float,
-    n_bootstraps: int,
-    seed: int,
-    progress_every: int,
-) -> pd.DataFrame:
-    """
-    Perform a stratified nonparametric bootstrap.
-
-    The number of class-0 and class-1 records in each replicate is held equal
-    to the corresponding count in the original test set. Labels and predicted
-    probabilities are always sampled as paired observations.
-    """
-    rng = np.random.default_rng(seed)
-
-    negative_indices = np.flatnonzero(y_true == 0)
-    positive_indices = np.flatnonzero(y_true == 1)
-
-    if len(negative_indices) == 0 or len(positive_indices) == 0:
-        raise ValueError("The test set must contain both outcome classes.")
-
-    rows = []
-    started = time.time()
-
-    for iteration in range(1, n_bootstraps + 1):
-        sampled_negative = rng.choice(
-            negative_indices,
-            size=len(negative_indices),
-            replace=True,
-        )
-        sampled_positive = rng.choice(
-            positive_indices,
-            size=len(positive_indices),
-            replace=True,
-        )
-
-        sampled_indices = np.concatenate(
-            [sampled_negative, sampled_positive]
-        )
-        # Shuffling is not mathematically required for the metrics but keeps
-        # each replicate in a conventional random order.
-        rng.shuffle(sampled_indices)
-
-        replicate_metrics = calculate_metrics(
-            y_true[sampled_indices],
-            y_prob[sampled_indices],
-            threshold,
-        )
-        replicate_metrics["bootstrap_iteration"] = iteration
-        rows.append(replicate_metrics)
-
-        if iteration % progress_every == 0 or iteration == n_bootstraps:
-            elapsed_minutes = (time.time() - started) / 60.0
-            print(
-                f"Bootstrap {iteration:,}/{n_bootstraps:,} completed "
-                f"({elapsed_minutes:.2f} minutes elapsed)",
-                flush=True,
-            )
-
-    columns_first = ["bootstrap_iteration"]
-    result = pd.DataFrame(rows)
-    return result[columns_first + [c for c in result.columns if c not in columns_first]]
-
-
-def summarize_bootstrap(
-    point_estimates: Dict[str, float],
-    bootstrap_df: pd.DataFrame,
-    confidence_level: float,
-    threshold: float,
-    threshold_method: str,
-) -> pd.DataFrame:
-    """Create percentile confidence intervals and bootstrap standard errors."""
-    alpha = 1.0 - confidence_level
-    lower_percentile = 100.0 * alpha / 2.0
-    upper_percentile = 100.0 * (1.0 - alpha / 2.0)
-
-    metric_names = [
-        "accuracy",
-        "precision",
-        "recall_sensitivity",
-        "specificity",
-        "negative_predictive_value",
-        "f1_score",
-        "roc_auc",
-        "pr_auc",
-        "balanced_accuracy",
-        "mcc",
-        "cohen_kappa",
-        "brier_score",
-    ]
-
-    rows = []
-    for metric in metric_names:
-        values = bootstrap_df[metric].to_numpy(dtype=np.float64)
-        values = values[np.isfinite(values)]
-
-        rows.append(
-            {
-                "metric": metric,
-                "point_estimate": point_estimates[metric],
-                "bootstrap_mean": float(np.mean(values)),
-                "bootstrap_standard_error": float(np.std(values, ddof=1)),
-                "ci_lower": float(np.percentile(values, lower_percentile)),
-                "ci_upper": float(np.percentile(values, upper_percentile)),
-                "confidence_level": confidence_level,
-                "n_valid_replicates": int(len(values)),
-                "bootstrap_method": "stratified_percentile",
-                "fixed_threshold": threshold,
-                "threshold_selected_on": "validation_set",
-                "threshold_selection_method": threshold_method,
-            }
-        )
-
-    return pd.DataFrame(rows)
+# #migrate: imported from ablation_bootstrap.py
 
 
 # =============================================================================
 # OUTPUT TABLES AND PLOTS
 # =============================================================================
-
-METRIC_DISPLAY_NAMES = {
-    "accuracy": "Accuracy",
-    "precision": "Precision",
-    "recall_sensitivity": "Recall / sensitivity",
-    "specificity": "Specificity",
-    "negative_predictive_value": "Negative predictive value",
-    "f1_score": "F1-score",
-    "roc_auc": "ROC-AUC",
-    "pr_auc": "PR-AUC",
-    "balanced_accuracy": "Balanced accuracy",
-    "mcc": "Matthews correlation coefficient",
-    "cohen_kappa": "Cohen's kappa",
-    "brier_score": "Brier score",
-}
-
-
-def create_manuscript_table(summary_df: pd.DataFrame) -> pd.DataFrame:
-    """Create a compact table with manuscript-ready estimate (95% CI) text."""
-    manuscript = summary_df.copy()
-    manuscript["metric_display"] = manuscript["metric"].map(
-        METRIC_DISPLAY_NAMES
-    )
-    manuscript["estimate_95_ci"] = manuscript.apply(
-        lambda row: (
-            f"{row['point_estimate']:.4f} "
-            f"({row['ci_lower']:.4f}–{row['ci_upper']:.4f})"
-        ),
-        axis=1,
-    )
-    return manuscript[
-        [
-            "metric_display",
-            "point_estimate",
-            "ci_lower",
-            "ci_upper",
-            "estimate_95_ci",
-            "bootstrap_standard_error",
-            "n_valid_replicates",
-            "fixed_threshold",
-        ]
-    ]
-
-
-def make_forest_plot(summary_df: pd.DataFrame, output_dir: Path) -> None:
-    """Create a horizontal confidence-interval plot for all metrics."""
-    plot_df = summary_df.copy()
-    plot_df["metric_display"] = plot_df["metric"].map(METRIC_DISPLAY_NAMES)
-
-    # Brier score has the opposite interpretation, but it can still be shown.
-    plot_df = plot_df.iloc[::-1].reset_index(drop=True)
-    y_position = np.arange(len(plot_df))
-
-    lower_error = plot_df["point_estimate"] - plot_df["ci_lower"]
-    upper_error = plot_df["ci_upper"] - plot_df["point_estimate"]
-
-    fig, ax = plt.subplots(figsize=(10, 7.5))
-    ax.errorbar(
-        plot_df["point_estimate"],
-        y_position,
-        xerr=np.vstack([lower_error, upper_error]),
-        fmt="o",
-        capsize=3,
-        linewidth=1.4,
-    )
-    ax.set_yticks(y_position)
-    ax.set_yticklabels(plot_df["metric_display"])
-    ax.set_xlabel("Point estimate and percentile 95% confidence interval")
-    ax.set_title("Baseline TabTransformer performance with bootstrap confidence intervals")
-    ax.grid(axis="x", alpha=0.25)
-    fig.tight_layout()
-
-    fig.savefig(
-        output_dir / "baseline_ci_forest_plot_v2.png",
-        dpi=300,
-        bbox_inches="tight",
-    )
-    fig.savefig(
-        output_dir / "baseline_ci_forest_plot_v2.pdf",
-        bbox_inches="tight",
-    )
-    plt.close(fig)
-
-
-def make_distribution_plot(
-    bootstrap_df: pd.DataFrame,
-    point_estimates: Dict[str, float],
-    output_dir: Path,
-) -> None:
-    """Plot distributions for the principal manuscript metrics."""
-    selected_metrics = [
-        "roc_auc",
-        "pr_auc",
-        "balanced_accuracy",
-        "mcc",
-        "cohen_kappa",
-        "f1_score",
-    ]
-
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
-    axes = axes.ravel()
-
-    for axis, metric in zip(axes, selected_metrics):
-        axis.hist(bootstrap_df[metric].dropna(), bins=40, alpha=0.85)
-        axis.axvline(
-            point_estimates[metric],
-            linestyle="--",
-            linewidth=1.5,
-            label="Point estimate",
-        )
-        axis.set_title(METRIC_DISPLAY_NAMES[metric])
-        axis.set_xlabel("Bootstrap value")
-        axis.set_ylabel("Frequency")
-        axis.grid(alpha=0.2)
-        axis.legend(frameon=False)
-
-    fig.suptitle(
-        "Bootstrap distributions for principal baseline-model metrics",
-        y=1.01,
-    )
-    fig.tight_layout()
-    fig.savefig(
-        output_dir / "baseline_bootstrap_distributions_v2.png",
-        dpi=300,
-        bbox_inches="tight",
-    )
-    fig.savefig(
-        output_dir / "baseline_bootstrap_distributions_v2.pdf",
-        bbox_inches="tight",
-    )
-    plt.close(fig)
+# #migrate: imported from ablation_plot_results.py
 
 
 # =============================================================================
@@ -713,13 +476,13 @@ def main() -> None:
         )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Python executable: {sys.executable}")
-    print(f"PyTorch version: {torch.__version__}")
-    print(f"Device: {device}")
+    logger.info("Python executable: %s", sys.executable)
+    logger.info("PyTorch version: %s", torch.__version__)
+    logger.info("Device: %s", device)
     if device.type == "cuda":
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        logger.info("GPU: %s", torch.cuda.get_device_name(0))
 
-    print("\nLoading saved model and exact validation/test splits...", flush=True)
+    logger.info("Loading saved model and exact validation/test splits")
     model_bundle = torch.load(
         MODEL_PATH,
         map_location="cpu",
@@ -785,7 +548,7 @@ def main() -> None:
 
     n_bootstraps = N_BOOTSTRAPS
     if FAST_MODE:
-        print("\nFAST_MODE is enabled. Results are diagnostic only.")
+        logger.warning("FAST_MODE is enabled. Results are diagnostic only.")
         rng_fast = np.random.default_rng(RANDOM_SEED)
 
         def stratified_subsample(X, y, max_rows):
@@ -808,16 +571,22 @@ def main() -> None:
         X_test, y_test = stratified_subsample(X_test, y_test, FAST_MAX_TEST_ROWS)
         n_bootstraps = FAST_BOOTSTRAPS
 
-    print(
-        f"Validation: {len(y_val):,} rows; positive rate={y_val.mean():.4f}"
+    logger.info(
+        "Validation: %d rows; positive rate=%.4f",
+        len(y_val),
+        y_val.mean(),
     )
-    print(
-        f"Test:       {len(y_test):,} rows; positive rate={y_test.mean():.4f}"
+    logger.info(
+        "Test: %d rows; positive rate=%.4f",
+        len(y_test),
+        y_test.mean(),
     )
-    print(
-        f"Features: categorical={len(cat_features)}, "
-        f"continuous={len(cont_features)}, binary={len(binary_features)}, "
-        f"total={len(all_features)}"
+    logger.info(
+        "Features: categorical=%d, continuous=%d, binary=%d, total=%d",
+        len(cat_features),
+        len(cont_features),
+        len(binary_features),
+        len(all_features),
     )
 
     model = AMRTabTransformer(
@@ -859,10 +628,10 @@ def main() -> None:
         pin_memory=PIN_MEMORY and device.type == "cuda",
     )
 
-    print("\nGenerating validation probabilities...", flush=True)
+    logger.info("Generating validation probabilities")
     val_probs, val_labels = predict_probabilities(model, val_loader, device)
 
-    print("Generating test probabilities...", flush=True)
+    logger.info("Generating test probabilities")
     test_probs, test_labels = predict_probabilities(model, test_loader, device)
 
     selected_threshold, validation_objective = select_validation_threshold(
@@ -870,11 +639,12 @@ def main() -> None:
         val_probs,
         THRESHOLD_METHOD,
     )
-    print(
-        f"\nValidation-selected threshold ({THRESHOLD_METHOD}): "
-        f"{selected_threshold:.6f}"
+    logger.info(
+        "Validation-selected threshold (%s): %.6f",
+        THRESHOLD_METHOD,
+        selected_threshold,
     )
-    print(f"Validation objective value: {validation_objective:.6f}")
+    logger.info("Validation objective value: %.6f", validation_objective)
 
     point_estimates = calculate_metrics(
         test_labels,
@@ -882,13 +652,12 @@ def main() -> None:
         selected_threshold,
     )
 
-    print("\nBaseline test-set point estimates")
-    print("-" * 62)
+    logger.info("Baseline test-set point estimates calculated")
     for metric, value in point_estimates.items():
         if isinstance(value, float):
-            print(f"{metric:30s}: {value:.6f}")
+            logger.info("  %30s: %.6f", metric, value)
         else:
-            print(f"{metric:30s}: {value}")
+            logger.info("  %30s: %s", metric, value)
 
     # Save probabilities before bootstrapping so they can be reused without
     # another model inference pass.
@@ -918,17 +687,19 @@ def main() -> None:
         index=False,
     )
 
-    print(
-        f"\nStarting {n_bootstraps:,} stratified bootstrap replicates...",
-        flush=True,
+    logger.info(
+        "Starting %d stratified bootstrap replicates",
+        n_bootstraps,
     )
+    # #migrate: pass metric callback and log progress every 250 iterations
     bootstrap_df = run_stratified_bootstrap(
         y_true=test_labels,
         y_prob=test_probs,
         threshold=selected_threshold,
+        calculate_metrics=calculate_metrics,
         n_bootstraps=n_bootstraps,
         seed=RANDOM_SEED,
-        progress_every=PROGRESS_EVERY,
+        progress_every=250,
     )
 
     summary_df = summarize_bootstrap(
@@ -1000,16 +771,23 @@ def main() -> None:
     ) as handle:
         json.dump(run_configuration, handle, indent=2)
 
+    logger.info("Creating forest plot")
     make_forest_plot(summary_df, OUTPUT_DIR)
+    logger.info("Forest plot saved")
+
+    logger.info("Creating bootstrap distribution plot")
     make_distribution_plot(bootstrap_df, point_estimates, OUTPUT_DIR)
+    logger.info("Bootstrap distribution plot saved")
 
-    print("\nFinal manuscript-ready values")
-    print("=" * 82)
-    print(manuscript_df[["metric_display", "estimate_95_ci"]].to_string(index=False))
+    logger.info("Final manuscript-ready values")
+    logger.info(
+        "\n%s",
+        manuscript_df[["metric_display", "estimate_95_ci"]].to_string(index=False),
+    )
 
-    print(f"\nAll outputs saved under: {OUTPUT_DIR.resolve()}")
+    logger.info("All outputs saved under: %s", OUTPUT_DIR.resolve())
     for path in sorted(OUTPUT_DIR.iterdir()):
-        print(f"  - {path.name}")
+        logger.info("  - %s", path.name)
 
     # Explicit cleanup can be helpful on shared GPU servers.
     del model, val_dataset, test_dataset, val_loader, test_loader

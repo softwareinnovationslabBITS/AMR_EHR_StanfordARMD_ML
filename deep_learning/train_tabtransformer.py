@@ -1,4 +1,5 @@
 # Source: /AMR_Stanford/DL_codes/amr_DL.py (model-training split)
+import logging
 import warnings
 import gc
 import sys
@@ -14,6 +15,13 @@ from sklearn.metrics import (roc_auc_score, average_precision_score,
 from sklearn.utils.class_weight import compute_class_weight
 
 warnings.filterwarnings('ignore')
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # #migrate: load training settings from the single config file
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,17 +59,18 @@ ab_le = _bundle['ab_le']
 keys_train = _bundle['keys_train']
 keys_val = _bundle['keys_val']
 keys_test = _bundle['keys_test']
-print(f"Loaded bundle -> Train: {X_train.shape[0]}, Val: {X_val.shape[0]}, Test: {X_test.shape[0]}")
+logger.info("Loaded bundle -> Train: %d, Val: %d, Test: %d",
+            X_train.shape[0], X_val.shape[0], X_test.shape[0])
 
 if __name__ == "__main__":
-    print("=== Starting AMR Tabular Transformer Training ===")
+    logger.info("Starting AMR TabTransformer training")
 
     device_cfg = _TT_CFG.get('device', 'cuda')
     if device_cfg == 'cuda' and not torch.cuda.is_available():
         device = torch.device('cpu')
     else:
         device = torch.device(device_cfg)
-    print(f"Using device: {device}\n")
+    logger.info("Using device: %s", device)
 
     class AMRDataset(Dataset):
         def __init__(self, X, y):
@@ -248,7 +257,8 @@ if __name__ == "__main__":
         val_probs, val_labels = np.concatenate(val_logits_list), np.concatenate(val_labels_list)
         val_auc = roc_auc_score(val_labels, val_probs)
         train_loss_epoch = total_loss / len(train_dataset)
-        print(f"Epoch [{epoch+1:02d}/{NUM_EPOCHS}] - Train Loss: {train_loss_epoch:.4f} | Val AUC: {val_auc:.4f}")
+        logger.info("Epoch [%02d/%d] train_loss=%.4f val_auc=%.4f",
+                    epoch + 1, NUM_EPOCHS, train_loss_epoch, val_auc)
 
         history['train_loss'].append(train_loss_epoch)
         history['val_auc'].append(val_auc)
@@ -260,13 +270,13 @@ if __name__ == "__main__":
         else:
             patience_cnt += 1
             if patience_cnt >= PATIENCE:
-                print("Early stopping triggered.")
+                logger.info("Early stopping triggered at epoch %d", epoch + 1)
                 break
 
     # ---------------------------------------------------------
     # 6. Comprehensive Saving for Post-hoc Analysis
     # ---------------------------------------------------------
-    print("\nTraining Finished. Packing up model and processing artifacts...")
+    logger.info("Training finished. Best val AUC: %.4f. Saving artifacts...", best_val_auc)
     model.load_state_dict(best_model_wts)
 
     # ---- 6a. Model weights + architecture metadata -> torch.save -----------
@@ -287,7 +297,7 @@ if __name__ == "__main__":
     import os
     os.makedirs(MODEL_PATH.parent, exist_ok=True)
     torch.save(model_bundle, MODEL_PATH)
-    print(f"Saved model weights + architecture metadata -> {MODEL_PATH}")
+    logger.info("Saved model weights + metadata -> %s", MODEL_PATH)
 
     # ---- 6b. Everything else -> joblib --------------------------------------
     # joblib is the standard tool for this: it's pickle-based but with much
@@ -336,8 +346,7 @@ if __name__ == "__main__":
         'class_weights':     class_weights,
     }
     joblib.dump(analysis_bundle, BUNDLE_PATH, compress=3)
-    print(f"Saved splits + preprocessors + metadata -> {BUNDLE_PATH}")
+    logger.info("Saved splits + preprocessors + metadata -> %s", BUNDLE_PATH)
 
-    print("\nSUCCESS: training artifacts saved as:")
-    print(f"  - {MODEL_PATH}  (model weights + history)")
-    print(f"  - {BUNDLE_PATH}  (splits + preprocessors + feature schema)")
+    logger.info("SUCCESS: %s  (model weights + history)", MODEL_PATH)
+    logger.info("SUCCESS: %s  (splits + preprocessors + feature schema)", BUNDLE_PATH)

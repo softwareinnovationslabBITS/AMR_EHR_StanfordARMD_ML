@@ -53,6 +53,7 @@
 
 import gc
 import json
+import logging
 import time
 import warnings
 from pathlib import Path
@@ -60,34 +61,37 @@ from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-
 from scipy import sparse
 
-from sklearn.preprocessing import OneHotEncoder
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    balanced_accuracy_score,
-    brier_score_loss,
-    cohen_kappa_score,
-    confusion_matrix,
-    f1_score,
-    matthews_corrcoef,
-    precision_recall_curve,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-    roc_curve,
-)
-from sklearn.calibration import calibration_curve
+from sklearn.preprocessing import OneHotEncoder
 
+# #migrate: split plotting, metrics, and I/O helpers into private modules
+from lr_io import (
+    save_bootstrap_results,
+    save_model_and_encoder,
+    save_predictions,
+    save_run_config,
+    save_test_metrics_row,
+    save_threshold_comparison,
+)
+from lr_metrics import (
+    calculate_metrics,
+    run_stratified_bootstrap,
+    select_threshold_by_mcc,
+    summarize_bootstrap_ci,
+)
+from lr_plotting import generate_all_plots
 
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+# #migrate: configure timestamped progress logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 # ======================================================================
@@ -172,10 +176,12 @@ print("FEATURE-MATCHED LOGISTIC REGRESSION")
 print("=" * 80)
 print(f"\nLoading DL analysis bundle:")
 print(bundle_path.resolve())
+logger.info("Loading analysis bundle from %s", bundle_path.resolve())
 
 start_total = time.time()
 
 bundle = joblib.load(bundle_path)
+logger.info("Analysis bundle loaded")
 
 
 # ======================================================================
@@ -211,6 +217,16 @@ print(f"\nTotal underlying features : {len(ALL_FEATURES):,}")
 print(f"Categorical               : {len(CAT_FEATURES):,}")
 print(f"Continuous                : {len(CONT_FEATURES):,}")
 print(f"Binary                    : {len(BINARY_FEATURES):,}")
+logger.info(
+    "Dataset loaded | train=%d val=%d test=%d | features=%d (cat=%d cont=%d bin=%d)",
+    len(y_train),
+    len(y_val),
+    len(y_test),
+    len(ALL_FEATURES),
+    len(CAT_FEATURES),
+    len(CONT_FEATURES),
+    len(BINARY_FEATURES),
+)
 
 
 # ======================================================================
@@ -298,6 +314,7 @@ print(
     f"OneHotEncoder fitted in "
     f"{(time.time() - t0)/60:.2f} minutes"
 )
+logger.info("One-hot encoding fitted on training categorical data")
 
 
 # ======================================================================
@@ -373,6 +390,12 @@ print("-" * 80)
 print(f"Train : {X_train_lr.shape}")
 print(f"Val   : {X_val_lr.shape}")
 print(f"Test  : {X_test_lr.shape}")
+logger.info(
+    "Final LR matrices | train=%s val=%s test=%s",
+    X_train_lr.shape,
+    X_val_lr.shape,
+    X_test_lr.shape,
+)
 
 
 # ======================================================================
@@ -412,6 +435,7 @@ print(
     f"\nExpanded LR design matrix features: "
     f"{len(expanded_feature_names):,}"
 )
+logger.info("Expanded LR design matrix features: %d", len(expanded_feature_names))
 
 
 # ======================================================================
@@ -450,8 +474,10 @@ print(
     f"\nLogistic regression training completed in "
     f"{training_minutes:.2f} minutes"
 )
+logger.info("Logistic regression training completed in %.2f minutes", training_minutes)
 
 print(f"Iterations used: {model.n_iter_[0]}")
+logger.info("Iterations used: %d", model.n_iter_[0])
 
 
 # ======================================================================
@@ -459,10 +485,12 @@ print(f"Iterations used: {model.n_iter_[0]}")
 # ======================================================================
 
 print("\nGenerating validation probabilities...")
+logger.info("Generating validation probabilities")
 
 val_prob = model.predict_proba(X_val_lr)[:, 1]
 
 print("Generating test probabilities...")
+logger.info("Generating test probabilities")
 
 test_prob = model.predict_proba(X_test_lr)[:, 1]
 
@@ -475,49 +503,12 @@ print("\n" + "=" * 80)
 print("SELECTING THRESHOLD ON VALIDATION SET")
 print("=" * 80)
 
-
-def select_threshold_by_mcc(y_true, probabilities):
-
-    thresholds = np.linspace(
-        0.0,
-        1.0,
-        N_THRESHOLD_CANDIDATES,
-    )
-
-    best_threshold = 0.5
-    best_mcc = -np.inf
-
-    rows = []
-
-    for threshold in thresholds:
-
-        pred = (probabilities >= threshold).astype(np.int8)
-
-        # Avoid degenerate one-class predictions causing meaningless values.
-        if len(np.unique(pred)) < 2:
-            mcc = 0.0
-        else:
-            mcc = matthews_corrcoef(y_true, pred)
-
-        rows.append(
-            {
-                "threshold": threshold,
-                "mcc": mcc,
-            }
-        )
-
-        if mcc > best_mcc:
-            best_mcc = mcc
-            best_threshold = threshold
-
-    threshold_df = pd.DataFrame(rows)
-
-    return best_threshold, best_mcc, threshold_df
-
+logger.info("Selecting threshold on validation set by maximum MCC")
 
 best_threshold, best_val_mcc, threshold_df = select_threshold_by_mcc(
     y_val,
     val_prob,
+    n_threshold_candidates=N_THRESHOLD_CANDIDATES,
 )
 
 print(f"Best validation threshold : {best_threshold:.4f}")
@@ -527,99 +518,18 @@ threshold_df.to_csv(
     OUTPUT_DIR / "validation_threshold_search.csv",
     index=False,
 )
+logger.info(
+    "Validation threshold selected: %.4f (MCC=%.6f)",
+    best_threshold,
+    best_val_mcc,
+)
 
 
 # ======================================================================
-# 16. METRIC FUNCTION
+# 16. METRICS
 # ======================================================================
 
-def calculate_metrics(y_true, probabilities, threshold):
-
-    pred = (probabilities >= threshold).astype(np.int8)
-
-    tn, fp, fn, tp = confusion_matrix(
-        y_true,
-        pred,
-        labels=[0, 1],
-    ).ravel()
-
-    specificity = (
-        tn / (tn + fp)
-        if (tn + fp) > 0
-        else np.nan
-    )
-
-    npv = (
-        tn / (tn + fn)
-        if (tn + fn) > 0
-        else np.nan
-    )
-
-    return {
-        "threshold": float(threshold),
-
-        "accuracy": accuracy_score(
-            y_true,
-            pred,
-        ),
-
-        "precision": precision_score(
-            y_true,
-            pred,
-            zero_division=0,
-        ),
-
-        "recall_sensitivity": recall_score(
-            y_true,
-            pred,
-            zero_division=0,
-        ),
-
-        "specificity": specificity,
-
-        "npv": npv,
-
-        "f1": f1_score(
-            y_true,
-            pred,
-            zero_division=0,
-        ),
-
-        "roc_auc": roc_auc_score(
-            y_true,
-            probabilities,
-        ),
-
-        "pr_auc": average_precision_score(
-            y_true,
-            probabilities,
-        ),
-
-        "balanced_accuracy": balanced_accuracy_score(
-            y_true,
-            pred,
-        ),
-
-        "mcc": matthews_corrcoef(
-            y_true,
-            pred,
-        ),
-
-        "cohen_kappa": cohen_kappa_score(
-            y_true,
-            pred,
-        ),
-
-        "brier_score": brier_score_loss(
-            y_true,
-            probabilities,
-        ),
-
-        "true_negative": int(tn),
-        "false_positive": int(fp),
-        "false_negative": int(fn),
-        "true_positive": int(tp),
-    }
+logger.info("Calculating validation and test metrics")
 
 
 # ======================================================================
@@ -690,47 +600,15 @@ metrics_row = {
     },
 }
 
-pd.DataFrame([metrics_row]).to_csv(
-    OUTPUT_DIR / "logistic_regression_test_metrics.csv",
-    index=False,
-)
-
-
-pd.DataFrame(
-    [
-        {
-            "threshold_type": "validation_MCC_optimized",
-            **test_metrics,
-        },
-        {
-            "threshold_type": "default_0.50",
-            **default_metrics,
-        },
-    ]
-).to_csv(
-    OUTPUT_DIR / "threshold_comparison.csv",
-    index=False,
-)
+save_test_metrics_row(metrics_row, OUTPUT_DIR)
+save_threshold_comparison(test_metrics, default_metrics, OUTPUT_DIR)
 
 
 # ======================================================================
 # 21. SAVE PREDICTIONS
 # ======================================================================
 
-prediction_df = pd.DataFrame(
-    {
-        "y_true": y_test,
-        "probability_resistant": test_prob,
-        "predicted_class": (
-            test_prob >= best_threshold
-        ).astype(np.int8),
-    }
-)
-
-prediction_df.to_csv(
-    OUTPUT_DIR / "test_predictions.csv",
-    index=False,
-)
+save_predictions(y_test, test_prob, best_threshold, OUTPUT_DIR)
 
 
 # ======================================================================
@@ -745,448 +623,57 @@ print(
 print("=" * 80)
 
 
-def stratified_bootstrap_indices(y, rng):
-
-    idx_0 = np.flatnonzero(y == 0)
-    idx_1 = np.flatnonzero(y == 1)
-
-    boot_0 = rng.choice(
-        idx_0,
-        size=len(idx_0),
-        replace=True,
-    )
-
-    boot_1 = rng.choice(
-        idx_1,
-        size=len(idx_1),
-        replace=True,
-    )
-
-    idx = np.concatenate(
-        [boot_0, boot_1]
-    )
-
-    rng.shuffle(idx)
-
-    return idx
-
-
-BOOTSTRAP_METRICS = [
-    "roc_auc",
-    "pr_auc",
-    "accuracy",
-    "precision",
-    "recall_sensitivity",
-    "specificity",
-    "npv",
-    "f1",
-    "balanced_accuracy",
-    "mcc",
-    "cohen_kappa",
-    "brier_score",
-]
-
-
-bootstrap_results = {
-    metric: []
-    for metric in BOOTSTRAP_METRICS
-}
-
-rng = np.random.default_rng(
-    BOOTSTRAP_SEED
+logger.info(
+    "Starting bootstrap confidence intervals (%d replicates)",
+    N_BOOTSTRAPS,
 )
 
-bootstrap_start = time.time()
-
-for b in range(N_BOOTSTRAPS):
-
-    idx = stratified_bootstrap_indices(
-        y_test,
-        rng,
-    )
-
-    y_b = y_test[idx]
-    p_b = test_prob[idx]
-
-    m = calculate_metrics(
-        y_b,
-        p_b,
-        best_threshold,
-    )
-
-    for metric in BOOTSTRAP_METRICS:
-        bootstrap_results[metric].append(
-            m[metric]
-        )
-
-    if (
-        (b + 1) % 100 == 0
-        or b == 0
-    ):
-        print(
-            f"Bootstrap "
-            f"{b + 1:,}/{N_BOOTSTRAPS:,}"
-        )
-
-
-bootstrap_rows = []
-
-for metric in BOOTSTRAP_METRICS:
-
-    values = np.asarray(
-        bootstrap_results[metric]
-    )
-
-    point_estimate = test_metrics[metric]
-
-    lower = np.percentile(
-        values,
-        2.5,
-    )
-
-    upper = np.percentile(
-        values,
-        97.5,
-    )
-
-    bootstrap_rows.append(
-        {
-            "metric": metric,
-            "estimate": point_estimate,
-            "ci_lower_95": lower,
-            "ci_upper_95": upper,
-        }
-    )
-
-
-bootstrap_df = pd.DataFrame(
-    bootstrap_rows
+# #migrate: progress logging every 250 iterations is handled in lr_metrics.py
+bootstrap_results = run_stratified_bootstrap(
+    y_test=y_test,
+    test_prob=test_prob,
+    best_threshold=best_threshold,
+    n_bootstraps=N_BOOTSTRAPS,
+    bootstrap_seed=BOOTSTRAP_SEED,
+    progress_every=250,
 )
 
-bootstrap_df.to_csv(
-    OUTPUT_DIR
-    / "logistic_regression_bootstrap_95CI.csv",
-    index=False,
+bootstrap_df = summarize_bootstrap_ci(
+    bootstrap_results,
+    test_metrics,
+    confidence_level=0.95,
 )
+
+save_bootstrap_results(bootstrap_df, OUTPUT_DIR)
 
 print("\nBootstrap 95% CIs")
-print(
-    bootstrap_df.to_string(
-        index=False
-    )
-)
+print(bootstrap_df.to_string(index=False))
+logger.info("Bootstrap confidence intervals completed")
 
-print(
-    f"\nBootstrap completed in "
-    f"{(time.time() - bootstrap_start)/60:.2f} minutes"
+
+# ======================================================================
+# 23-28. PLOTS
+# ======================================================================
+
+generate_all_plots(
+    y_test=y_test,
+    test_prob=test_prob,
+    test_metrics=test_metrics,
+    threshold_df=threshold_df,
+    best_threshold=best_threshold,
+    model=model,
+    expanded_feature_names=expanded_feature_names,
+    n_calibration_bins=N_CALIBRATION_BINS,
+    top_n_coefficients=TOP_N_COEFFICIENTS,
+    output_dir=OUTPUT_DIR,
 )
 
 
 # ======================================================================
-# 23. ROC CURVE
+# 29-30. SAVE MODEL, ENCODER, AND CONFIGURATION
 # ======================================================================
 
-fpr, tpr, _ = roc_curve(
-    y_test,
-    test_prob,
-)
-
-plt.figure(figsize=(7, 6))
-
-plt.plot(
-    fpr,
-    tpr,
-    linewidth=2,
-    label=(
-        f"Logistic regression "
-        f"(AUC={test_metrics['roc_auc']:.3f})"
-    ),
-)
-
-plt.plot(
-    [0, 1],
-    [0, 1],
-    linestyle="--",
-)
-
-plt.xlabel("False Positive Rate")
-plt.ylabel("True Positive Rate")
-plt.title("Logistic Regression ROC Curve")
-plt.legend()
-plt.tight_layout()
-
-plt.savefig(
-    OUTPUT_DIR / "roc_curve.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# ======================================================================
-# 24. PRECISION-RECALL CURVE
-# ======================================================================
-
-precision_curve, recall_curve, _ = precision_recall_curve(
-    y_test,
-    test_prob,
-)
-
-prevalence = np.mean(y_test)
-
-plt.figure(figsize=(7, 6))
-
-plt.plot(
-    recall_curve,
-    precision_curve,
-    linewidth=2,
-    label=(
-        f"Logistic regression "
-        f"(AP={test_metrics['pr_auc']:.3f})"
-    ),
-)
-
-plt.axhline(
-    prevalence,
-    linestyle="--",
-    label=f"Resistance prevalence={prevalence:.3f}",
-)
-
-plt.xlabel("Recall")
-plt.ylabel("Precision")
-plt.title("Logistic Regression Precision-Recall Curve")
-plt.legend()
-plt.tight_layout()
-
-plt.savefig(
-    OUTPUT_DIR / "precision_recall_curve.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# ======================================================================
-# 25. CONFUSION MATRIX
-# ======================================================================
-
-test_pred = (
-    test_prob >= best_threshold
-).astype(np.int8)
-
-cm = confusion_matrix(
-    y_test,
-    test_pred,
-    labels=[0, 1],
-)
-
-plt.figure(figsize=(6, 5))
-
-plt.imshow(cm)
-
-plt.xticks(
-    [0, 1],
-    ["Susceptible", "Resistant"],
-)
-
-plt.yticks(
-    [0, 1],
-    ["Susceptible", "Resistant"],
-)
-
-plt.xlabel("Predicted")
-plt.ylabel("Observed")
-
-plt.title(
-    "Logistic Regression Confusion Matrix\n"
-    f"Validation-selected threshold = "
-    f"{best_threshold:.3f}"
-)
-
-for i in range(2):
-    for j in range(2):
-        plt.text(
-            j,
-            i,
-            f"{cm[i, j]:,}",
-            ha="center",
-            va="center",
-        )
-
-plt.tight_layout()
-
-plt.savefig(
-    OUTPUT_DIR / "confusion_matrix.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# ======================================================================
-# 26. CALIBRATION CURVE
-# ======================================================================
-
-fraction_positive, mean_predicted = calibration_curve(
-    y_test,
-    test_prob,
-    n_bins=N_CALIBRATION_BINS,
-    strategy="quantile",
-)
-
-plt.figure(figsize=(7, 6))
-
-plt.plot(
-    mean_predicted,
-    fraction_positive,
-    marker="o",
-    linewidth=2,
-    label="Logistic regression",
-)
-
-plt.plot(
-    [0, 1],
-    [0, 1],
-    linestyle="--",
-    label="Perfect calibration",
-)
-
-plt.xlabel("Mean predicted probability")
-plt.ylabel("Observed resistant proportion")
-
-plt.title(
-    "Logistic Regression Calibration"
-)
-
-plt.legend()
-plt.tight_layout()
-
-plt.savefig(
-    OUTPUT_DIR / "calibration_curve.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# ======================================================================
-# 27. VALIDATION THRESHOLD CURVE
-# ======================================================================
-
-plt.figure(figsize=(7, 6))
-
-plt.plot(
-    threshold_df["threshold"],
-    threshold_df["mcc"],
-)
-
-plt.axvline(
-    best_threshold,
-    linestyle="--",
-    label=(
-        f"Selected threshold="
-        f"{best_threshold:.3f}"
-    ),
-)
-
-plt.xlabel("Classification threshold")
-plt.ylabel("Validation MCC")
-plt.title("Validation Threshold Selection")
-plt.legend()
-plt.tight_layout()
-
-plt.savefig(
-    OUTPUT_DIR / "validation_threshold_mcc.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# ======================================================================
-# 28. COEFFICIENT IMPORTANCE
-# ======================================================================
-
-coefficients = model.coef_[0]
-
-coef_df = pd.DataFrame(
-    {
-        "feature": expanded_feature_names,
-        "coefficient": coefficients,
-    }
-)
-
-coef_df["absolute_coefficient"] = np.abs(
-    coef_df["coefficient"]
-)
-
-coef_df = coef_df.sort_values(
-    "absolute_coefficient",
-    ascending=False,
-)
-
-coef_df.to_csv(
-    OUTPUT_DIR / "all_logistic_coefficients.csv",
-    index=False,
-)
-
-
-top_coef = coef_df.head(
-    TOP_N_COEFFICIENTS
-).copy()
-
-# Reverse so largest appears at top in horizontal plot.
-top_coef = top_coef.iloc[::-1]
-
-plt.figure(
-    figsize=(10, 10)
-)
-
-plt.barh(
-    top_coef["feature"],
-    top_coef["coefficient"],
-)
-
-plt.xlabel("Logistic regression coefficient")
-plt.ylabel("Feature")
-plt.title(
-    f"Top {TOP_N_COEFFICIENTS} Logistic Regression Coefficients"
-)
-
-plt.tight_layout()
-
-plt.savefig(
-    OUTPUT_DIR / "top_logistic_coefficients.png",
-    dpi=300,
-    bbox_inches="tight",
-)
-
-plt.close()
-
-
-# ======================================================================
-# 29. SAVE MODEL AND ENCODER
-# ======================================================================
-
-joblib.dump(
-    model,
-    OUTPUT_DIR / "logistic_regression_model.joblib",
-)
-
-joblib.dump(
-    encoder,
-    OUTPUT_DIR / "onehot_encoder.joblib",
-)
-
-
-# ======================================================================
-# 30. SAVE CONFIGURATION
-# ======================================================================
+save_model_and_encoder(model, encoder, OUTPUT_DIR)
 
 config = {
     "random_seed": RANDOM_SEED,
@@ -1209,16 +696,7 @@ config = {
     "bootstrap_replicates": N_BOOTSTRAPS,
 }
 
-
-with open(
-    OUTPUT_DIR / "run_config.json",
-    "w",
-) as f:
-    json.dump(
-        config,
-        f,
-        indent=2,
-    )
+save_run_config(config, OUTPUT_DIR)
 
 
 # ======================================================================

@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import warnings
 import gc
+import logging
 import os
 import sys
 from pathlib import Path
@@ -11,6 +12,14 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 
 warnings.filterwarnings('ignore')
+
+# #migrate: configure timestamped progress logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 # #migrate: load split/seed/paths from the single config file
 ROOT = Path(__file__).resolve().parent.parent

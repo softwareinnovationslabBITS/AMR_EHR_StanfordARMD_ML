@@ -1,4 +1,4 @@
-# Source: /AMR_Stanford/DL_codes/amr_project/xgb_dl_feature_matched_project/03_compare_xgb_models.py
+# Source: /AMR_Stanford/DL_codes/amr_project/xgb_dl_feature_matched_project/compare_xgb_models.py
 """Comparison plots and manuscript table for completed XGBoost models."""
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt

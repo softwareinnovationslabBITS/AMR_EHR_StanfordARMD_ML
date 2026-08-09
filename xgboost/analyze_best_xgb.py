@@ -1,4 +1,4 @@
-# Source: /AMR_Stanford/DL_codes/amr_project/xgb_dl_feature_matched_project/02_analyze_best_xgb.py
+# Source: /AMR_Stanford/DL_codes/amr_project/xgb_dl_feature_matched_project/analyze_best_xgb.py
 """Bootstrap CIs and full diagnostic/SHAP analysis for best validation PR-AUC model."""
 from __future__ import annotations
 import json,time
@@ -66,7 +66,7 @@ def forest(ci,method):
 
 def main():
     ensure_dirs(); rp=RESULT_DIR/'all_model_results.csv'
-    if not rp.exists(): raise FileNotFoundError('Run 01_train_xgb_variations.py first')
+    if not rp.exists(): raise FileNotFoundError('Run train_xgb_variations.py first')
     res=pd.read_csv(rp).dropna(subset=['validation_pr_auc']); best=res.sort_values('validation_pr_auc',ascending=False).iloc[0]; method=str(best.method); print(f'Best by validation PR-AUC: {method}')
     z=np.load(PRED_DIR/f'{method}_predictions.npz'); yv=z['y_val'].astype(np.int8); vp=z['val_prob'].astype(float); yt=z['y_test'].astype(np.int8); tp=z['test_prob'].astype(float); t,ts=select_threshold(yv,vp)
     pd.DataFrame([{'method':method,'selected_by':'validation_pr_auc','validation_pr_auc':float(best.validation_pr_auc),**metrics(yt,tp,t)}]).to_csv(RESULT_DIR/'best_xgb_test_point_metrics.csv',index=False)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Source: /AMR_Stanford/DL_codes/amr_project/amr_baseline_final_loss_plot.py
+# Source: /AMR_Stanford/DL_codes/amr_project/amr_baseline_tabtransformer_loss_evaluation.py
 """
 Standalone loss evaluation and visualization for the saved baseline
 AMR TabTransformer model.
@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import gc
 import json
+import logging
 import os
 import random
 import sys
@@ -51,11 +52,22 @@ import pandas as pd
 import torch
 import torch.nn as nn
 from sklearn.utils.class_weight import compute_class_weight
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+# #migrate: split data loading/processing and plotting into private modules
+from ablation_loss_data import AMRDataset, evaluate_mean_loss
+from ablation_loss_plots import (
+    plot_final_loss_comparison,
+    plot_training_and_final_split_losses,
+)
+
+# #migrate: configure timestamped progress logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -317,138 +329,9 @@ class AMRTabTransformer(nn.Module):
 
 
 # =============================================================================
-# 4. DATASET
+# 4-5. DATASET AND LOSS EVALUATION
+#    #migrate: AMRDataset and evaluate_mean_loss moved to ablation_loss_data.py
 # =============================================================================
-
-class AMRDataset(Dataset):
-    def __init__(
-        self,
-        X: np.ndarray,
-        y: np.ndarray,
-        cat_idx: List[int],
-        cont_idx: List[int],
-        bin_idx: List[int],
-    ) -> None:
-
-        self.X_cat = torch.as_tensor(
-            X[:, cat_idx].astype(np.int64),
-            dtype=torch.long,
-        )
-
-        self.X_cont = torch.as_tensor(
-            X[:, cont_idx].astype(np.float32),
-            dtype=torch.float32,
-        )
-
-        self.X_bin = torch.as_tensor(
-            X[:, bin_idx].astype(np.float32),
-            dtype=torch.float32,
-        )
-
-        self.y = torch.as_tensor(
-            y.astype(np.float32),
-            dtype=torch.float32,
-        )
-
-    def __len__(self) -> int:
-        return len(self.y)
-
-    def __getitem__(
-        self,
-        index: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-
-        return (
-            self.X_cat[index],
-            self.X_cont[index],
-            self.X_bin[index],
-            self.y[index],
-        )
-
-
-# =============================================================================
-# 5. LOSS EVALUATION
-# =============================================================================
-
-@torch.no_grad()
-def evaluate_mean_loss(
-    model: nn.Module,
-    loader: DataLoader,
-    criterion: nn.Module,
-    device: torch.device,
-    split_name: str,
-) -> float:
-    """
-    Calculate mean loss over one complete dataset split.
-    """
-
-    model.eval()
-
-    total_loss = 0.0
-    total_observations = 0
-
-    start_time = time.time()
-
-    for batch_number, (
-        x_cat,
-        x_cont,
-        x_bin,
-        y_batch,
-    ) in enumerate(loader, start=1):
-
-        x_cat = x_cat.to(
-            device,
-            non_blocking=True,
-        )
-
-        x_cont = x_cont.to(
-            device,
-            non_blocking=True,
-        )
-
-        x_bin = x_bin.to(
-            device,
-            non_blocking=True,
-        )
-
-        y_batch = y_batch.to(
-            device,
-            non_blocking=True,
-        )
-
-        logits = model(
-            x_cat,
-            x_cont,
-            x_bin,
-        )
-
-        batch_loss = criterion(
-            logits,
-            y_batch,
-        )
-
-        batch_size = y_batch.size(0)
-
-        total_loss += batch_loss.item() * batch_size
-        total_observations += batch_size
-
-        if batch_number % 500 == 0:
-            elapsed_minutes = (
-                time.time() - start_time
-            ) / 60
-
-            print(
-                f"  {split_name}: processed "
-                f"{total_observations:,} rows "
-                f"({elapsed_minutes:.2f} minutes)"
-            )
-
-    if total_observations == 0:
-        raise ValueError(
-            f"{split_name} loader contained no observations."
-        )
-
-    return total_loss / total_observations
 
 
 # =============================================================================
@@ -457,9 +340,9 @@ def evaluate_mean_loss(
 
 def main() -> None:
 
-    print("=" * 78)
-    print("BASELINE TABTRANSFORMER FINAL LOSS EVALUATION")
-    print("=" * 78)
+    logger.info("=" * 78)
+    logger.info("BASELINE TABTRANSFORMER FINAL LOSS EVALUATION")
+    logger.info("=" * 78)
 
     if not MODEL_PATH.exists():
         raise FileNotFoundError(
@@ -476,14 +359,15 @@ def main() -> None:
         "cuda" if torch.cuda.is_available() else "cpu"
     )
 
-    print(f"Device: {device}")
+    logger.info("Device: %s", device)
 
     if device.type == "cuda":
-        print(
-            f"GPU: {torch.cuda.get_device_name(0)}"
+        logger.info(
+            "GPU: %s",
+            torch.cuda.get_device_name(0),
         )
 
-    print("\nLoading saved artifacts...")
+    logger.info("Loading saved artifacts...")
 
     model_bundle = torch.load(
         MODEL_PATH,
@@ -593,10 +477,10 @@ def main() -> None:
         )
     )
 
-    print("\nSplit sizes:")
-    print(f"  Train:      {len(y_train):,}")
-    print(f"  Validation: {len(y_val):,}")
-    print(f"  Test:       {len(y_test):,}")
+    logger.info("Split sizes:")
+    logger.info("  Train:      %s", f"{len(y_train):,}")
+    logger.info("  Validation: %s", f"{len(y_val):,}")
+    logger.info("  Test:       %s", f"{len(y_test):,}")
 
     model = AMRTabTransformer(
         cat_cardinalities=model_bundle[
@@ -616,7 +500,7 @@ def main() -> None:
     model.to(device)
     model.eval()
 
-    print("\nModel loaded successfully.")
+    logger.info("Model loaded successfully.")
 
     # -------------------------------------------------------------------------
     # Recreate the original weighted BCE loss.
@@ -644,21 +528,21 @@ def main() -> None:
             pos_weight=positive_weight
         )
 
-        print(
-            "\nLoss: weighted BCEWithLogitsLoss"
+        logger.info(
+            "Loss: weighted BCEWithLogitsLoss"
         )
 
-        print(
-            f"Positive-class weight: "
-            f"{positive_weight_value:.6f}"
+        logger.info(
+            "Positive-class weight: %.6f",
+            positive_weight_value,
         )
 
     else:
         positive_weight_value = None
         criterion = nn.BCEWithLogitsLoss()
 
-        print(
-            "\nLoss: unweighted BCEWithLogitsLoss"
+        logger.info(
+            "Loss: unweighted BCEWithLogitsLoss"
         )
 
     # -------------------------------------------------------------------------
@@ -713,7 +597,7 @@ def main() -> None:
     # Final losses for the saved best model
     # -------------------------------------------------------------------------
 
-    print("\nCalculating final training loss...")
+    logger.info("Calculating final training loss...")
     final_train_loss = evaluate_mean_loss(
         model=model,
         loader=train_loader,
@@ -722,7 +606,7 @@ def main() -> None:
         split_name="Train",
     )
 
-    print("\nCalculating final validation loss...")
+    logger.info("Calculating final validation loss...")
     final_validation_loss = evaluate_mean_loss(
         model=model,
         loader=val_loader,
@@ -731,7 +615,7 @@ def main() -> None:
         split_name="Validation",
     )
 
-    print("\nCalculating final test loss...")
+    logger.info("Calculating final test loss...")
     final_test_loss = evaluate_mean_loss(
         model=model,
         loader=test_loader,
@@ -740,18 +624,18 @@ def main() -> None:
         split_name="Test",
     )
 
-    print("\nFinal saved-model losses:")
-    print(
-        f"  Training loss:   "
-        f"{final_train_loss:.6f}"
+    logger.info("Final saved-model losses:")
+    logger.info(
+        "  Training loss:   %.6f",
+        final_train_loss,
     )
-    print(
-        f"  Validation loss: "
-        f"{final_validation_loss:.6f}"
+    logger.info(
+        "  Validation loss: %.6f",
+        final_validation_loss,
     )
-    print(
-        f"  Test loss:       "
-        f"{final_test_loss:.6f}"
+    logger.info(
+        "  Test loss:       %.6f",
+        final_test_loss,
     )
 
     # -------------------------------------------------------------------------
@@ -783,9 +667,8 @@ def main() -> None:
         training_loss_history is None
         or len(training_loss_history) == 0
     ):
-        print(
-            "\nWarning: no per-epoch training loss "
-            "was found in the saved model."
+        logger.warning(
+            "No per-epoch training loss was found in the saved model."
         )
 
     # -------------------------------------------------------------------------
@@ -868,204 +751,41 @@ def main() -> None:
 
     # -------------------------------------------------------------------------
     # Plot 1: saved training-loss curve plus final split-loss references.
+    # #migrate: plotting moved to ablation_loss_plots.py
     # -------------------------------------------------------------------------
 
     if (
         training_loss_history is not None
         and len(training_loss_history) > 0
     ):
-        epochs = np.arange(
-            1,
-            len(training_loss_history) + 1,
+        logger.info("Plotting training loss with final split-loss references")
+
+        plot_training_and_final_split_losses(
+            training_loss_history=training_loss_history,
+            validation_auc_history=validation_auc_history,
+            final_train_loss=final_train_loss,
+            final_validation_loss=final_validation_loss,
+            final_test_loss=final_test_loss,
+            output_dir=OUTPUT_DIR,
         )
 
-        fig, ax = plt.subplots(
-            figsize=(10, 6)
-        )
-
-        ax.plot(
-            epochs,
-            training_loss_history,
-            linewidth=2.2,
-            label="Training loss recorded during training",
-        )
-
-        ax.axhline(
-            final_train_loss,
-            linestyle="--",
-            linewidth=1.5,
-            label=(
-                "Final saved-model training loss "
-                f"= {final_train_loss:.4f}"
-            ),
-        )
-
-        ax.axhline(
-            final_validation_loss,
-            linestyle=":",
-            linewidth=1.8,
-            label=(
-                "Final saved-model validation loss "
-                f"= {final_validation_loss:.4f}"
-            ),
-        )
-
-        ax.axhline(
-            final_test_loss,
-            linestyle="-.",
-            linewidth=1.8,
-            label=(
-                "Final saved-model test loss "
-                f"= {final_test_loss:.4f}"
-            ),
-        )
-
-        if (
-            validation_auc_history is not None
-            and len(validation_auc_history)
-            == len(training_loss_history)
-        ):
-            best_epoch = int(
-                np.argmax(
-                    validation_auc_history
-                )
-                + 1
-            )
-
-            best_validation_auc = float(
-                np.max(
-                    validation_auc_history
-                )
-            )
-
-            ax.axvline(
-                best_epoch,
-                linestyle="--",
-                linewidth=1.2,
-                label=(
-                    f"Best saved epoch = {best_epoch} "
-                    f"(validation ROC-AUC "
-                    f"= {best_validation_auc:.4f})"
-                ),
-            )
-
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel(
-            "Weighted binary cross-entropy loss"
-        )
-
-        ax.set_title(
-            "Baseline TabTransformer training loss and "
-            "final split losses"
-        )
-
-        ax.grid(alpha=0.25)
-        ax.legend(
-            frameon=False,
-            fontsize=9,
-        )
-
-        fig.tight_layout()
-
-        figure_one_png = (
-            OUTPUT_DIR
-            / "baseline_training_and_final_split_losses_v3.png"
-        )
-
-        figure_one_pdf = (
-            OUTPUT_DIR
-            / "baseline_training_and_final_split_losses_v3.pdf"
-        )
-
-        fig.savefig(
-            figure_one_png,
-            dpi=300,
-            bbox_inches="tight",
-        )
-
-        fig.savefig(
-            figure_one_pdf,
-            bbox_inches="tight",
-        )
-
-        plt.close(fig)
+        logger.info("Training/split-loss plot saved")
 
     # -------------------------------------------------------------------------
     # Plot 2: final train-validation-test loss comparison.
+    # #migrate: plotting moved to ablation_loss_plots.py
     # -------------------------------------------------------------------------
 
-    fig, ax = plt.subplots(
-        figsize=(8, 6)
+    logger.info("Plotting final train-validation-test loss comparison")
+
+    plot_final_loss_comparison(
+        final_train_loss=final_train_loss,
+        final_validation_loss=final_validation_loss,
+        final_test_loss=final_test_loss,
+        output_dir=OUTPUT_DIR,
     )
 
-    split_names = [
-        "Training",
-        "Validation",
-        "Test",
-    ]
-
-    split_losses = [
-        final_train_loss,
-        final_validation_loss,
-        final_test_loss,
-    ]
-
-    bars = ax.bar(
-        split_names,
-        split_losses,
-    )
-
-    ax.set_ylabel(
-        "Weighted binary cross-entropy loss"
-    )
-
-    ax.set_title(
-        "Final loss of the saved baseline TabTransformer"
-    )
-
-    ax.grid(
-        axis="y",
-        alpha=0.25,
-    )
-
-    for bar, value in zip(
-        bars,
-        split_losses,
-    ):
-        ax.text(
-            bar.get_x()
-            + bar.get_width() / 2,
-            bar.get_height(),
-            f"{value:.4f}",
-            ha="center",
-            va="bottom",
-            fontsize=10,
-        )
-
-    fig.tight_layout()
-
-    figure_two_png = (
-        OUTPUT_DIR
-        / "baseline_final_train_validation_test_loss_v3.png"
-    )
-
-    figure_two_pdf = (
-        OUTPUT_DIR
-        / "baseline_final_train_validation_test_loss_v3.pdf"
-    )
-
-    fig.savefig(
-        figure_two_png,
-        dpi=300,
-        bbox_inches="tight",
-    )
-
-    fig.savefig(
-        figure_two_pdf,
-        bbox_inches="tight",
-    )
-
-    plt.close(fig)
+    logger.info("Final loss comparison plot saved")
 
     # -------------------------------------------------------------------------
     # Save run metadata.
@@ -1117,20 +837,19 @@ def main() -> None:
             indent=2,
         )
 
-    print("\nOutputs saved in:")
-    print(OUTPUT_DIR.resolve())
-
-    print("\nCreated files:")
+    logger.info("Outputs saved in: %s", OUTPUT_DIR.resolve())
+    logger.info("Created files:")
 
     for output_path in sorted(
         OUTPUT_DIR.iterdir()
     ):
-        print(
-            f"  - {output_path.name}"
+        logger.info(
+            "  - %s",
+            output_path.name,
         )
 
-    print(
-        "\nImportant: validation and test losses shown "
+    logger.info(
+        "Important: validation and test losses shown "
         "are final values for the saved best model, "
         "not per-epoch curves."
     )
@@ -1140,8 +859,10 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(
-            f"\nERROR: {type(exc).__name__}: {exc}",
-            file=sys.stderr,
+        logger.error(
+            "ERROR: %s: %s",
+            type(exc).__name__,
+            exc,
+            exc_info=True,
         )
         raise

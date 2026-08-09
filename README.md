@@ -28,35 +28,22 @@ AMR_EHR_StanfordARMD_ML/
 ├── preprocessing/
 │   └── build_dl_features.py  # builds the shared amr_analysis_bundle.joblib
 ├── logistic_regression/
-│   └── lr_dl_matched.py      # logistic regression benchmark
+│   └── logistic_regression_dl_matched.py  # logistic regression benchmark
 ├── xgboost/
-│   ├── xgb_config.py         # shared XGBoost configuration
-│   ├── xgb_common.py         # shared helpers
-│   ├── run_all.py            # run the canonical XGBoost scripts
+│   ├── xgb_config.py                      # shared XGBoost configuration
+│   ├── xgb_common.py                      # shared helpers
+│   ├── run_xgb_pipeline.py                # runs the DL-matched XGBoost scripts
 │   ├── check_sr_ratios.py
-│   ├── 01_train_xgb_variations.py
-│   ├── 02_analyze_best_xgb.py
-│   ├── 03_compare_xgb_models.py
-│   └── imbalance_handling/   # seven strategies from manuscript Table 1
-│       ├── 00_preprocess.py
-│       ├── 01_baseline_xgb.py
-│       ├── 02_class_weights.py
-│       ├── 03_smote.py
-│       ├── 04_undersampling.py
-│       ├── 05_threshold_optimization.py
-│       ├── 06_kfold_cv.py
-│       ├── 07_bayesian_optuna.py
-│       ├── common.py
-│       ├── utils.py
-│       ├── run_all.py
-│       └── visualization/
+│   ├── train_xgb_variations.py
+│   ├── analyze_best_xgb.py
+│   └── compare_xgb_models.py
 ├── deep_learning/
 │   ├── train_tabtransformer.py
 │   ├── analyze_tabtransformer.py
 │   └── ablation/
 │       ├── tabtransformer_ablation.py
 │       ├── bootstrap_ci.py
-│       └── final_loss_plot.py
+│       └── tabtransformer_loss_evaluation.py
 └── models/
     └── tabtransformer/
         └── .gitkeep          # trained model is written here
@@ -85,35 +72,16 @@ and logistic-regression steps run on CPU.
 - Enough free disk space for the raw CSV files and the generated bundle
 - A CUDA GPU is required only for the TabTransformer training and analysis
   scripts; XGBoost and logistic regression will run on CPU
-- Docker is **not** used in this pipeline
 
 ## Data
 
-The ARMD-Stanford dataset is **not** included in this repository. The user who
-runs the pipeline must copy the raw CSV files into the `dataset/` folder. See
-`dataset/README.md` for the exact file list. Raw data and generated artifacts
-are Git-ignored.
+The ARMD-Stanford dataset is **not** included. Copy the raw CSV files into the
+`dataset/` folder; see `dataset/README.md` for the required files. Raw data and
+generated artifacts are Git-ignored.
 
-After a full run, the repository will contain these generated output
-locations (all Git-ignored):
-
-| Track | Output location | What is inside |
-|---|---|---|
-| Preprocessing | `dataset/amr_analysis_bundle.joblib` | shared splits + preprocessors |
-| Logistic regression | `logistic_regression/logistic_regression_dl_matched_outputs/` | metrics, plots, predictions |
-| XGBoost (DL-matched) | `xgboost/xgb_dl_matched_outputs_v1/` | models, predictions, results, plots, shap, optuna logs |
-| XGBoost (imbalance) | `xgboost/imbalance_handling/cache/`, `saved_models/`, `results/` | cached split, trained models, comparison log |
-| TabTransformer | `models/tabtransformer/amr_model.pt` | trained model weights |
-| TabTransformer analysis | `deep_learning/amr_analysis_outputs/` | SHAP, ROC/PR, calibration plots |
-| TabTransformer ablation | `deep_learning/amr_ablation_study_outputs/` | ablation metrics, histories, models |
-| Bootstrap CI | `deep_learning/baseline_ci_bootstrap_results_v2/` | confidence intervals, forest plots |
-| Final loss plot | `deep_learning/baseline_final_loss_evaluation_v3/` | loss curves and CSVs |
-
-After running `preprocessing/build_dl_features.py`, the same `dataset/` folder
-will also contain `amr_analysis_bundle.joblib`. This bundle is the shared
-preprocessed input for all three modeling tracks (logistic regression,
-XGBoost, and TabTransformer), so every model trains and evaluates on identical
-train / validation / test splits.
+Running `preprocessing/build_dl_features.py` produces
+`dataset/amr_analysis_bundle.joblib`, the shared preprocessed input for all
+modeling tracks.
 
 ## Running the pipeline
 
@@ -133,23 +101,13 @@ This produces `dataset/amr_analysis_bundle.joblib`.
 Logistic regression:
 
 ```bash
-python logistic_regression/lr_dl_matched.py
+python logistic_regression/logistic_regression_dl_matched.py
 ```
 
-Canonical XGBoost experiments:
+XGBoost DL-matched experiments:
 
 ```bash
-python xgboost/01_train_xgb_variations.py
-python xgboost/02_analyze_best_xgb.py
-python xgboost/03_compare_xgb_models.py
-# or run all three at once
-python xgboost/run_all.py
-```
-
-XGBoost imbalance-handling experiments (manuscript Table 1):
-
-```bash
-python xgboost/imbalance_handling/run_all.py
+python xgboost/run_xgb_pipeline.py
 ```
 
 TabTransformer deep learning:
@@ -164,7 +122,7 @@ TabTransformer ablation analysis:
 ```bash
 python deep_learning/ablation/tabtransformer_ablation.py
 python deep_learning/ablation/bootstrap_ci.py
-python deep_learning/ablation/final_loss_plot.py
+python deep_learning/ablation/tabtransformer_loss_evaluation.py
 ```
 
 ## Configuration
@@ -179,7 +137,6 @@ Key sections in `config.yaml`:
 - `seed` - global random seed
 - `paths` - shared input/output directories
 - `split` - train/validation/test split sizes
-- `xgboost_imbalance` - seven-strategy imbalance-handling experiments
 - `xgboost` - DL-feature-matched XGBoost workflow
 - `tabtransformer` - TabTransformer training and analysis settings
 

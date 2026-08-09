@@ -10,29 +10,6 @@ split:
   val_size: 0.15
   random_state: 42
 
-# Imbalance-handling XGBoost experiments (manuscript Table 1)
-xgboost_imbalance:
-  dataset_dir: "dataset"
-  cache_dir: "xgboost/imbalance_handling/cache"
-  saved_models_dir: "xgboost/imbalance_handling/saved_models"
-  results_dir: "xgboost/imbalance_handling/results"
-  random_state: 42
-  test_size: 0.2
-  device: "cuda"
-  tree_method: "hist"
-  n_jobs: -1
-  n_estimators: 2000
-  learning_rate: 0.02
-  max_depth: 8
-  subsample: 0.8
-  colsample_bytree: 0.7
-  eval_metric: "aucpr"
-  early_stopping_rounds: 50
-  smote_k_neighbors: 5
-  kfold_n_splits: 3
-  optuna_n_trials: 30
-  optuna_n_splits: 3
-
 # DL-feature-matched XGBoost workflow
 xgboost:
   bundle_path: "dataset/amr_analysis_bundle.joblib"

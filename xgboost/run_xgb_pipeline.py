@@ -5,9 +5,9 @@ from pathlib import Path
 # #migrate: resolve scripts relative to this file so the runner works from any cwd
 _HERE = Path(__file__).resolve().parent
 SCRIPTS=[
-    _HERE/'01_train_xgb_variations.py',
-    _HERE/'03_compare_xgb_models.py',
-    _HERE/'02_analyze_best_xgb.py',
+    _HERE/'train_xgb_variations.py',
+    _HERE/'compare_xgb_models.py',
+    _HERE/'analyze_best_xgb.py',
 ]
 def main():
     start=time.time()
