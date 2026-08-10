@@ -315,6 +315,8 @@ if __name__ == "__main__":
         'cat_idx':           cat_idx,
         'cont_idx':          cont_idx,
         'bin_idx':           bin_idx,
+        'cat_cardinalities': cat_cardinalities,
+        'cat_embed_dims':    cat_embed_dims,
         'MERGE_KEY':         MERGE_KEY,
 
         # ── preprocessors — needed to transform any new/unseen data identically ──
