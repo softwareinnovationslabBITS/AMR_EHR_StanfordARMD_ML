@@ -1,6 +1,9 @@
 # Required Data Files
 
-Place the following raw CSV files in this directory (`dataset/`). These are not committed to Git.
+Download the required data files from [Dryad Dataset: doi:10.5061/dryad.jq2bvq8kp](https://datadryad.org/dataset/doi:10.5061/dryad.jq2bvq8kp) and move them to this folder (`dataset/`). 
+Please ensure you use the files dated **Oct 22 2025**.
+
+These are the required files : 
 
 - microbiology_cultures_cohort.csv
 - microbiology_cultures_demographics.csv
