@@ -649,11 +649,25 @@ def main() -> None:
 
     training_loss_history = None
     validation_auc_history = None
+    validation_loss_history = None
+    training_auc_history = None
 
     if isinstance(history, dict):
         if "train_loss" in history:
             training_loss_history = np.asarray(
                 history["train_loss"],
+                dtype=float,
+            )
+
+        if "val_loss" in history:
+            validation_loss_history = np.asarray(
+                history["val_loss"],
+                dtype=float,
+            )
+
+        if "train_auc" in history:
+            training_auc_history = np.asarray(
+                history["train_auc"],
                 dtype=float,
             )
 
@@ -729,6 +743,24 @@ def main() -> None:
                 ),
             }
         )
+
+        if (
+            validation_loss_history is not None
+            and len(validation_loss_history)
+            == len(training_loss_history)
+        ):
+            history_table[
+                "validation_loss"
+            ] = validation_loss_history
+
+        if (
+            training_auc_history is not None
+            and len(training_auc_history)
+            == len(training_loss_history)
+        ):
+            history_table[
+                "training_roc_auc"
+            ] = training_auc_history
 
         if (
             validation_auc_history is not None
