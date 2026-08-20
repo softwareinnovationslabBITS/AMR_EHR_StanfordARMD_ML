@@ -229,7 +229,11 @@ if __name__ == "__main__":
 
     # Per-epoch curves -> saved so the analysis script can plot the real
     # training history instead of re-deriving or guessing it.
-    history = {'train_loss': [], 'val_loss': [], 'train_auc': [], 'val_auc': []}
+    history = {
+        'train_loss': [], 'val_loss': [], 
+        'train_auc': [], 'val_auc': [],
+        'train_pr_auc': [], 'val_pr_auc': []
+    }
 
     for epoch in range(NUM_EPOCHS):
         model.train()
@@ -258,7 +262,7 @@ if __name__ == "__main__":
                 val_logits_list.append(torch.sigmoid(logits).cpu().numpy())
                 val_labels_list.append(y_batch.numpy())
 
-        # Also calculate Training AUC for diagnostics (takes ~15-20s per epoch)
+        # Also calculate Training AUC/PR-AUC for diagnostics (takes ~15-20s per epoch)
         train_logits_list, train_labels_list = [], []
         with torch.no_grad():
             for x_cat, x_cont, x_bin, y_batch in train_eval_loader:
@@ -269,19 +273,23 @@ if __name__ == "__main__":
 
         val_probs, val_labels = np.concatenate(val_logits_list), np.concatenate(val_labels_list)
         val_auc = roc_auc_score(val_labels, val_probs)
+        val_pr_auc = average_precision_score(val_labels, val_probs)
 
         train_probs, train_labels = np.concatenate(train_logits_list), np.concatenate(train_labels_list)
         train_auc = roc_auc_score(train_labels, train_probs)
+        train_pr_auc = average_precision_score(train_labels, train_probs)
 
         train_loss_epoch = total_loss / len(train_dataset)
         val_loss_epoch = total_val_loss / len(val_dataset)
-        logger.info("Epoch [%02d/%d] train_loss=%.4f val_loss=%.4f train_auc=%.4f val_auc=%.4f",
-                    epoch + 1, NUM_EPOCHS, train_loss_epoch, val_loss_epoch, train_auc, val_auc)
+        logger.info("Epoch [%02d/%d] train_loss=%.4f val_loss=%.4f train_auc=%.4f val_auc=%.4f train_pr_auc=%.4f val_pr_auc=%.4f",
+                    epoch + 1, NUM_EPOCHS, train_loss_epoch, val_loss_epoch, train_auc, val_auc, train_pr_auc, val_pr_auc)
 
         history['train_loss'].append(train_loss_epoch)
         history['val_loss'].append(val_loss_epoch)
         history['train_auc'].append(train_auc)
         history['val_auc'].append(val_auc)
+        history['train_pr_auc'].append(train_pr_auc)
+        history['val_pr_auc'].append(val_pr_auc)
 
         if val_auc > best_val_auc:
             best_val_auc = val_auc

@@ -651,6 +651,8 @@ def main() -> None:
     validation_auc_history = None
     validation_loss_history = None
     training_auc_history = None
+    training_pr_auc_history = None
+    validation_pr_auc_history = None
 
     if isinstance(history, dict):
         if "train_loss" in history:
@@ -674,6 +676,18 @@ def main() -> None:
         if "val_auc" in history:
             validation_auc_history = np.asarray(
                 history["val_auc"],
+                dtype=float,
+            )
+
+        if "train_pr_auc" in history:
+            training_pr_auc_history = np.asarray(
+                history["train_pr_auc"],
+                dtype=float,
+            )
+
+        if "val_pr_auc" in history:
+            validation_pr_auc_history = np.asarray(
+                history["val_pr_auc"],
                 dtype=float,
             )
 
@@ -770,6 +784,24 @@ def main() -> None:
             history_table[
                 "validation_roc_auc"
             ] = validation_auc_history
+
+        if (
+            training_pr_auc_history is not None
+            and len(training_pr_auc_history)
+            == len(training_loss_history)
+        ):
+            history_table[
+                "training_pr_auc"
+            ] = training_pr_auc_history
+
+        if (
+            validation_pr_auc_history is not None
+            and len(validation_pr_auc_history)
+            == len(training_loss_history)
+        ):
+            history_table[
+                "validation_pr_auc"
+            ] = validation_pr_auc_history
 
         history_csv = (
             OUTPUT_DIR

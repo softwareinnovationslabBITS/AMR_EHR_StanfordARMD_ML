@@ -106,8 +106,8 @@ PREDICTION_BATCH_SIZE = 1024
 NUM_WORKERS = 0
 PIN_MEMORY = True
 
-# Threshold-selection rule. Currently supports "f1" or "youden".
-THRESHOLD_METHOD = "f1"
+# Threshold-selection rule. Currently supports "f1", "youden", or "mcc".
+THRESHOLD_METHOD = "mcc"
 
 # Print progress every N bootstrap iterations.
 PROGRESS_EVERY = 50
@@ -387,6 +387,18 @@ def select_validation_threshold(
         best_index = int(np.nanargmax(f1_values))
         return float(thresholds[best_index]), float(f1_values[best_index])
 
+    if method == "mcc":
+        thresholds = np.linspace(0.001, 0.999, 999)
+        best_mcc = -2.0
+        best_threshold = 0.5
+        for th in thresholds:
+            y_pred = (y_prob >= th).astype(np.int8)
+            mcc = matthews_corrcoef(y_true, y_pred)
+            if mcc > best_mcc:
+                best_mcc = mcc
+                best_threshold = th
+        return float(best_threshold), float(best_mcc)
+
     if method == "youden":
         # Avoid importing roc_curve unless this option is selected.
         from sklearn.metrics import roc_curve
@@ -404,7 +416,7 @@ def select_validation_threshold(
         best_index = int(candidate_indices[best_local])
         return float(thresholds[best_index]), float(youden_j[best_index])
 
-    raise ValueError("THRESHOLD_METHOD must be either 'f1' or 'youden'.")
+    raise ValueError("THRESHOLD_METHOD must be 'f1', 'youden', or 'mcc'.")
 
 
 def calculate_metrics(
