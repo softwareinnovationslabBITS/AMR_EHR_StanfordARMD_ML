@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 loss_dir = os.path.join(project_root, "deep_learning/baseline_final_loss_evaluation_v3")
-output_dir = os.path.join(project_root, "deep_learning/amr_analysis_outputs")
+output_dir = os.path.dirname(os.path.abspath(__file__))
 history_path = os.path.join(loss_dir, "baseline_saved_training_history_v3.csv")
 
 df_hist = pd.read_csv(history_path)

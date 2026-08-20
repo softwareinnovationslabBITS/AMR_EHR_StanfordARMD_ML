@@ -6,7 +6,7 @@ from sklearn.calibration import calibration_curve
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 xgb_pred_path = os.path.join(project_root, "xgboost/xgb_dl_matched_outputs_v1/predictions/optuna_predictions.npz")
-output_dir = os.path.join(project_root, "deep_learning/amr_analysis_outputs")
+output_dir = os.path.dirname(os.path.abspath(__file__))
 
 xgb_data = np.load(xgb_pred_path)
 y_true = xgb_data['y_test']

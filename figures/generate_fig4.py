@@ -5,7 +5,7 @@ import matplotlib.colors as mcolors
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 shap_dir = os.path.join(project_root, "xgboost/xgb_dl_matched_outputs_v1/shap")
-output_dir = os.path.join(project_root, "deep_learning/amr_analysis_outputs")
+output_dir = os.path.dirname(os.path.abspath(__file__))
 
 npz_path = os.path.join(shap_dir, "best_xgb_shap_values_sample.npz")
 data = np.load(npz_path, allow_pickle=True)

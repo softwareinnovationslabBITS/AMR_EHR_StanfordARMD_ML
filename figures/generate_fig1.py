@@ -9,7 +9,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 lr_pred_path = os.path.join(project_root, "logistic_regression/logistic_regression_dl_matched_outputs/test_predictions.csv")
 xgb_pred_path = os.path.join(project_root, "xgboost/xgb_dl_matched_outputs_v1/predictions/optuna_predictions.npz")
 trans_pred_path = os.path.join(project_root, "deep_learning/baseline_ci_bootstrap_results_v2/baseline_test_predictions_v2.npz")
-output_dir = os.path.join(project_root, "deep_learning/amr_analysis_outputs")
+output_dir = os.path.dirname(os.path.abspath(__file__))
 os.makedirs(output_dir, exist_ok=True)
 
 df_lr = pd.read_csv(lr_pred_path)

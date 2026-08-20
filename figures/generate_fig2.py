@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 figures_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(figures_dir)
 xgb_results_dir = os.path.join(project_root, "xgboost/xgb_dl_matched_outputs_v1/results")
-output_dir = os.path.join(project_root, "deep_learning/amr_analysis_outputs")
+output_dir = os.path.dirname(os.path.abspath(__file__))
 
 csv_path = os.path.join(xgb_results_dir, "all_model_results.csv")
 

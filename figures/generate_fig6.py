@@ -5,7 +5,7 @@ import numpy as np
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ablation_dir = os.path.join(project_root, "deep_learning/amr_ablation_study_outputs")
-output_dir = os.path.join(project_root, "deep_learning/amr_analysis_outputs")
+output_dir = os.path.dirname(os.path.abspath(__file__))
 summary_path = os.path.join(ablation_dir, "ablation_summary_metrics.csv")
 
 df = pd.read_csv(summary_path)
