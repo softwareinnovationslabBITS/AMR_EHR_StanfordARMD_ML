@@ -5,6 +5,7 @@ import os
 figures_dir = os.path.dirname(os.path.abspath(__file__))
 figure_scripts = [
     "generate_fig1.py",
+    "generate_fig2.py",
     "generate_fig3.py",
     "generate_fig4.py",
     "generate_fig5.py",
