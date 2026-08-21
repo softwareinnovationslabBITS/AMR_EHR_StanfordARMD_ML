@@ -33,7 +33,7 @@ ax.grid(True, linestyle=':', alpha=0.6, axis='x')
 
 for bar in bars:
     width = bar.get_width()
-    ax.annotate(f'-{width:.4f}',
+    ax.annotate(f'{width:.4f}',
                 xy=(width, bar.get_y() + bar.get_height() / 2),
                 xytext=(5, 0),
                 textcoords="offset points",

@@ -9,7 +9,15 @@ figure_scripts = [
     "generate_fig3.py",
     "generate_fig4.py",
     "generate_fig5.py",
-    "generate_fig6.py"
+    "generate_fig6.py",
+    "generate_supp_fig_s1.py",
+    "generate_supp_fig_s2.py",
+    "generate_supp_fig_s3.py",
+    "generate_supp_fig_s4.py",
+    "generate_supp_fig_s5.py",
+    "generate_supp_fig_s6.py",
+    "generate_supp_fig_s7.py",
+    "generate_supp_fig_s8.py",
 ]
 
 print("Starting full figure generation pipeline...")
