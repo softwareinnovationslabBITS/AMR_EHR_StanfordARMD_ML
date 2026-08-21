@@ -19,7 +19,7 @@ def main():
     # Plot validation ROC-AUC trajectory for each experiment
     for exp in history["experiment"].unique():
         exp_data = history[history["experiment"] == exp]
-        ax.plot(exp_data["epoch"], exp_data["val_roc_auc"], label=exp, linewidth=1.5)
+        ax.plot(exp_data["epoch"], exp_data["validation_roc_auc"], label=exp, linewidth=1.5)
         
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Validation ROC-AUC")
