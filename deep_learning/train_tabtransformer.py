@@ -223,6 +223,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
     # 5. Training Loop
     # ---------------------------------------------------------
+    best_val_loss = float('inf')
     best_val_auc  = 0.0
     patience_cnt  = 0
     best_model_wts = None
@@ -291,20 +292,21 @@ if __name__ == "__main__":
         history['train_pr_auc'].append(train_pr_auc)
         history['val_pr_auc'].append(val_pr_auc)
 
-        if val_auc > best_val_auc:
+        if val_loss_epoch < best_val_loss:
+            best_val_loss = val_loss_epoch
             best_val_auc = val_auc
             best_model_wts = {k: v.clone() for k, v in model.state_dict().items()}
             patience_cnt = 0
         else:
             patience_cnt += 1
             if patience_cnt >= PATIENCE:
-                logger.info("Early stopping triggered at epoch %d", epoch + 1)
+                logger.info("Early stopping triggered at epoch %d due to validation loss not improving", epoch + 1)
                 break
 
     # ---------------------------------------------------------
     # 6. Comprehensive Saving for Post-hoc Analysis
     # ---------------------------------------------------------
-    logger.info("Training finished. Best val AUC: %.4f. Saving artifacts...", best_val_auc)
+    logger.info("Training finished. Best val loss: %.4f. Saving artifacts...", best_val_loss)
     model.load_state_dict(best_model_wts)
 
     # ---- 6a. Model weights + architecture metadata -> torch.save -----------

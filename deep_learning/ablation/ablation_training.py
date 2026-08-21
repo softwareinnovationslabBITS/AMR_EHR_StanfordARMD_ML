@@ -17,7 +17,11 @@ from typing import Dict, List, Sequence, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import (
+    average_precision_score,
+    matthews_corrcoef,
+    roc_auc_score,
+)
 from sklearn.utils.class_weight import compute_class_weight
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader, Dataset
@@ -176,14 +180,17 @@ def select_threshold_on_validation(
     labels: np.ndarray,
     probabilities: np.ndarray,
 ) -> Tuple[float, float]:
-    """Select the F1-maximizing threshold using validation data only."""
-    thresholds = np.linspace(0.01, 0.99, 199)
-    f1_values = [
-        f1_score(labels, probabilities >= threshold, zero_division=0)
-        for threshold in thresholds
-    ]
-    best_index = int(np.argmax(f1_values))
-    return float(thresholds[best_index]), float(f1_values[best_index])
+    """Select the MCC-maximizing threshold using validation data only."""
+    thresholds = np.linspace(0.001, 0.999, 999)
+    best_mcc = -2.0
+    best_threshold = 0.5
+    for threshold in thresholds:
+        y_pred = (probabilities >= threshold).astype(np.int8)
+        mcc = matthews_corrcoef(labels, y_pred)
+        if mcc > best_mcc:
+            best_mcc = mcc
+            best_threshold = threshold
+    return float(best_threshold), float(best_mcc)
 
 
 def train_one_experiment(
@@ -305,7 +312,8 @@ def train_one_experiment(
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
 
     epochs_to_run = FAST_EPOCHS if FAST_MODE else NUM_EPOCHS
-    best_val_auc = -np.inf
+    best_val_loss = float('inf')
+    best_val_auc  = -np.inf
     best_epoch = 0
     patience_counter = 0
     best_state_dict = None
@@ -339,32 +347,54 @@ def train_one_experiment(
 
         scheduler.step()
         train_loss = running_loss / len(train_dataset)
+
+        # Compute validation loss
+        model.eval()
+        running_val_loss = 0.0
+        with torch.no_grad():
+            for x_cat, x_cont, x_bin, y_batch in val_loader:
+                x_cat = x_cat.to(device, non_blocking=True)
+                x_cont = x_cont.to(device, non_blocking=True)
+                x_bin = x_bin.to(device, non_blocking=True)
+                y_batch = y_batch.to(device, non_blocking=True)
+                with torch.autocast(device_type=device.type, dtype=torch.float16, enabled=use_amp):
+                    logits = model(x_cat, x_cont, x_bin)
+                    val_loss = criterion(logits, y_batch)
+                running_val_loss += val_loss.item() * len(y_batch)
+        val_loss_epoch = running_val_loss / len(val_dataset)
+
         val_probabilities, val_labels = predict_probabilities(
             model, val_loader, device
         )
         val_auc = roc_auc_score(val_labels, val_probabilities)
+        val_pr_auc = average_precision_score(val_labels, val_probabilities)
 
         history_rows.append(
             {
                 "experiment": experiment_name,
                 "epoch": epoch,
                 "train_loss": train_loss,
+                "val_loss": val_loss_epoch,
                 "validation_roc_auc": val_auc,
+                "val_pr_auc": val_pr_auc,
                 "learning_rate": optimizer.param_groups[0]["lr"],
             }
         )
 
         # #migrate: log epoch progress for each ablation experiment
         logger.info(
-            "%s | epoch %02d/%02d | train_loss=%.5f | val_auc=%.5f",
+            "%s | epoch %02d/%02d | train_loss=%.5f | val_loss=%.5f | val_auc=%.5f | val_pr_auc=%.5f",
             experiment_name,
             epoch,
             epochs_to_run,
             train_loss,
+            val_loss_epoch,
             val_auc,
+            val_pr_auc,
         )
 
-        if val_auc > best_val_auc:
+        if val_loss_epoch < best_val_loss:
+            best_val_loss = val_loss_epoch
             best_val_auc = val_auc
             best_epoch = epoch
             best_state_dict = {
@@ -376,7 +406,7 @@ def train_one_experiment(
             patience_counter += 1
             if patience_counter >= EARLY_STOPPING_PATIENCE:
                 logger.info(
-                    "%s | early stopping at epoch %d",
+                    "%s | early stopping at epoch %d (val loss not improving)",
                     experiment_name,
                     epoch,
                 )
