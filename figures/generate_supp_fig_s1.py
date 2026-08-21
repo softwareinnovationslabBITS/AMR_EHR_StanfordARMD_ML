@@ -29,7 +29,7 @@ def main():
         
     ax.axvline(t, ls='--', label=f'Selected={t:.3f}')
     ax.set(xlabel='Decision threshold', ylabel='Validation metric', title='Validation threshold analysis')
-    ax.legend(frameon=False, ncol=2)
+    ax.legend(loc='lower center', bbox_to_anchor=(0.4, 0.02), frameon=False, ncol=2)
     ax.grid(alpha=.25)
     
     caption_text = (
