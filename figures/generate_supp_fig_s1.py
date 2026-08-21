@@ -29,7 +29,7 @@ def main():
         
     ax.axvline(t, ls='--', label=f'Selected={t:.3f}')
     ax.set(xlabel='Decision threshold', ylabel='Validation metric', title='Validation threshold analysis')
-    ax.legend(bbox_to_anchor=(1.04, 0.5), loc="center left", frameon=False)
+    ax.legend(loc='lower center', bbox_to_anchor=(0.33, 0.02), frameon=False, ncol=2)
     ax.grid(alpha=.25)
     
     caption_text = (
@@ -37,7 +37,7 @@ def main():
     )
     fig.text(0.5, -0.05, caption_text, ha='center', va='top', fontsize=12, weight='bold')
     
-    fig.tight_layout(rect=[0, 0.05, 0.8, 1])
+    fig.tight_layout(rect=[0, 0.05, 1, 1])
     
     os.makedirs(output_dir, exist_ok=True)
     fig.savefig(os.path.join(output_dir, "Supplementary_Figure_S1.png"), dpi=300, bbox_inches='tight')

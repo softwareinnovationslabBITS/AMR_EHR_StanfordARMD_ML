@@ -31,6 +31,9 @@ ax.set_xlabel('Performance Drop (Control ROC-AUC - Ablated ROC-AUC)')
 ax.set_title('Effect of Feature-Group Removal on TabTransformer Performance', fontsize=13, weight='bold', pad=15)
 ax.grid(True, linestyle=':', alpha=0.6, axis='x')
 
+# Add padding to the right so annotations don't overflow the plot area
+ax.set_xlim(right=df_ab['roc_drop'].max() * 1.15)
+
 for bar in bars:
     width = bar.get_width()
     ax.annotate(f'{width:.4f}',
